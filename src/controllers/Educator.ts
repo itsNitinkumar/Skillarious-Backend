@@ -1,103 +1,169 @@
 import { Request, Response } from 'express';
 import { db } from '../db/index.ts';
-import { 
-  educatorsTable, 
-  coursesTable, 
-  doubtsTable, 
-  transactionsTable 
-} from '../db/schema.ts';
-import { eq, and, sql } from 'drizzle-orm';
-import { uploadMedia } from '../utils/storage.ts';
+import { educatorsTable, usersTable } from '../db/schema.ts';
+import { eq } from 'drizzle-orm';
 
 interface AuthenticatedRequest extends Request {
   user: {
-    id: string
+    id: string;
+    email: string;
   };
 }
 
-export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
+// Register as educator
+export const registerAsEducator = async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userId = req.user.id;
     const { bio, about } = req.body;
-    const educatorId = req.user.id;
-    
-    const profilePic = req.files?.profilePic;
-    let profilePicUrl;
 
-    if (profilePic) {
-      const upload = await uploadMedia(profilePic, 'image');
-      profilePicUrl = upload.url;
+    // Check if user exists
+    const user = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    if (!user.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
     }
 
-    const updatedProfile = await db.update(educatorsTable)
-      .set({
-        bio,
-        about,
-        ...(profilePicUrl ? { profilePic: profilePicUrl } : {})
+    // Check if already an educator
+    const existingEducator = await db.select()
+      .from(educatorsTable)
+      .where(eq(educatorsTable.userId, userId));
+
+    if (existingEducator.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'User is already registered as an educator'
+      });
+    }
+
+    // Create educator profile
+    const newEducator = await db.insert(educatorsTable)
+      .values({
+        userId,
+        bio: bio || null,
+        about: about || null,
+        doubtOpen: false
       })
-      .where(eq(educatorsTable.id, educatorId))
       .returning();
 
-    return res.status(200).json({
+    // Update user isEducator status
+    await db.update(usersTable)
+      .set({ isEducator: true })
+      .where(eq(usersTable.id, userId));
+
+    return res.status(201).json({
       success: true,
-      data: updatedProfile[0]
+      message: 'Successfully registered as educator',
+      data: newEducator[0]
     });
   } catch (error) {
+    console.error('Error in registerAsEducator:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error updating profile'
+      message: 'Failed to register as educator'
     });
   }
 };
 
-export const getAnalytics = async (req: Request, res: Response) => {
+// Get educator profile
+export const getEducatorProfile = async (req: Request, res: Response) => {
   try {
-    const educatorId = (req as AuthenticatedRequest).user.id;
+    const { id } = req.params;
 
-    // Get total courses
-    const courses = await db.select().from(coursesTable)
-      .where(eq(coursesTable.educatorId, educatorId));
+    const educator = await db.select()
+      .from(educatorsTable)
+      .where(eq(educatorsTable.id, id));
 
-    // Get total students from transactions
-    const enrolledStudents = await db
-      .select()
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.status, 'completed'),
-          sql`${transactionsTable.courseId} IN (
-            SELECT id FROM ${coursesTable}
-            WHERE ${coursesTable.educatorId} = ${educatorId}
-          )`
-        )
-      );
-
-    const uniqueStudents = [...new Set(enrolledStudents.map(e => e.userId))];
-    const totalStudents = uniqueStudents.length;
-
-    // Get total doubts
-    const doubts = await db.select().from(doubtsTable)
-      .where(eq(doubtsTable.educatorAssigned, educatorId));
-
-    // Calculate response rate
-    const resolvedDoubts = doubts.filter(d => d.resolved);
-    const responseRate = doubts.length > 0 
-      ? (resolvedDoubts.length / doubts.length) * 100 
-      : 0;
+    if (!educator.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Educator not found'
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      data: {
-        totalCourses: courses.length,
-        totalStudents,
-        totalDoubts: doubts.length,
-        responseRate,
-        totalRevenue: enrolledStudents.reduce((sum, t) => sum + Number(t.amount), 0)
-      }
+      data: educator[0]
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Error fetching analytics'
+      message: 'Error fetching educator profile'
+    });
+  }
+};
+
+// Update educator profile
+export const updateEducatorProfile = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user.id;
+    const { bio, about, doubtOpen } = req.body;
+
+    const updatedEducator = await db.update(educatorsTable)
+      .set({
+        bio: bio || undefined,
+        about: about || undefined,
+        doubtOpen: doubtOpen !== undefined ? doubtOpen : undefined
+      })
+      .where(eq(educatorsTable.userId, userId))
+      .returning();
+
+    if (!updatedEducator.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Educator profile not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedEducator[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating educator profile'
+    });
+  }
+};
+
+// Toggle doubt availability
+export const toggleDoubtAvailability = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user.id;
+
+    const educator = await db.select()
+      .from(educatorsTable)
+      .where(eq(educatorsTable.userId, userId));
+
+    if (!educator.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Educator not found'
+      });
+    }
+
+    const updatedEducator = await db.update(educatorsTable)
+      .set({
+        doubtOpen: !educator[0].doubtOpen
+      })
+      .where(eq(educatorsTable.userId, userId))
+      .returning();
+
+    return res.status(200).json({
+      success: true,
+      message: `Doubt availability ${updatedEducator[0].doubtOpen ? 'enabled' : 'disabled'}`,
+      data: updatedEducator[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error toggling doubt availability'
     });
   }
 };

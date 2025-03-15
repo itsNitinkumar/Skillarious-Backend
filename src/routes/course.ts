@@ -2,7 +2,7 @@ import express from "express";
 const router = express.Router();
 import {createCourse,updateCourse,deleteCourse,getAllCourses,getSingleCourse,searchCourses,getCoursesByCategory,getCoursesByEducator} from '../controllers/Course.ts';
 router.post("/create", createCourse as unknown as express.RequestHandler);
-router.post("/update", updateCourse as unknown as express.RequestHandler);
+router.put("/update/:id", updateCourse as unknown as express.RequestHandler);  // Changed from POST to PUT
 router.delete("/delete/:id",deleteCourse as unknown as express.RequestHandler);
 router.post("/all",getAllCourses as unknown as express.RequestHandler);
 router.post("/single",getSingleCourse as unknown as express.RequestHandler);

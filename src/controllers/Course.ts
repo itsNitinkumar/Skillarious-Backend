@@ -48,37 +48,55 @@ export const createCourse = async (req: Request, res: Response): Promise<Respons
 // 2) controller for updating the course
 
 export const updateCourse = async(req: Request, res:Response):Promise<Response> => {
-    try{
-    const {id} = req.params;
-    const {name, description, about, price} = req.body;
-    const course = await db.select().from(coursesTable).where(eq(coursesTable.id,id));
-    if(!course.length){
-        return res.status(404).json({ 
-            success:false,
-            message: 'Course not found' });
-    };
-    // update the course
-    const updatedCourse = await db.update(coursesTable).set({
-        name: name || course[0].name,
-        description: description || course[0].description,
-        about: about || course[0].about,
-        price: price !== undefined ? price : course[0].price
-    }).where(eq(coursesTable.id, id))
-    .returning();
+    try {
+        const {id} = req.params;
+        const {name, description, about, price} = req.body;
+        
+        // First check if course exists
+        const course = await db.select().from(coursesTable).where(eq(coursesTable.id,id));
+        if(!course.length){
+            return res.status(404).json({ 
+                success: false,
+                message: 'Course not found' 
+            });
+        }
 
-    return res.status(200).json({
-        duccess: true,
-        message: 'Course updated successfully',
-        course: updatedCourse[0],
-      });
-  
+        // Create an update object with only defined values
+        const updateData: Record<string, any> = {};
+        
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (about !== undefined) updateData.about = about;
+        if (price !== undefined) updateData.price = price.toString();
+
+        // Only perform update if there are fields to update
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid fields to update'
+            });
+        }
+
+        // Update the course with only defined fields
+        const updatedCourse = await db.update(coursesTable)
+            .set(updateData)
+            .where(eq(coursesTable.id, id))
+            .returning();
+
+        return res.status(200).json({
+            success: true,  // Fixed typo in 'success'
+            message: 'Course updated successfully',
+            course: updatedCourse[0],
+        });
+    
     } catch (error) {
-      console.error('Error updating course:', error);
-      return res.status(500).json({
-        success: false, 
-        message: 'Error in updating course' });
+        console.error('Error updating course:', error);
+        return res.status(500).json({
+            success: false, 
+            message: 'Error in updating course' 
+        });
     }
-  };
+};
   // 3)  controller for deleting the course
  export const deleteCourse = async (req: Request, res: Response): Promise<Response> => {
   try {
