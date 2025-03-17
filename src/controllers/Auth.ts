@@ -283,6 +283,7 @@ export const refreshToken = async(req: Request, res: Response): Promise<void> =>
          return;
     }
 };
+// authenticated user
 
 export const authenticateUser = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
@@ -296,13 +297,20 @@ export const authenticateUser = async (req: AuthenticatedRequest, res: Response,
         }
 
         const token = authHeader.split(" ")[1];
-        
+        //console.log(token);
         if (!process.env.JWT_SECRET) {
             throw new Error("JWT_SECRET is not defined");
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
+        //console.log(decoded);
+        if(!decoded || typeof decoded === 'string'){
+            return res.status(401).json({
+                success: false,
+                message: "Authentication failed: Invalid token",
+            });
+        }
+        req.user = decoded?.user;
         
         next();
     } catch (error) {

@@ -6,7 +6,8 @@ import {sendEmail} from "../utils/sendEmail.ts";
 import {eq} from "drizzle-orm";
 import {desc} from "drizzle-orm";
 
-
+/////we will generate otp through RLC6238TOTP////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
 //generating the otp
 export const generateOtp = async(req: Request, res: Response): Promise<void>  => {
     try{
