@@ -8,7 +8,7 @@ import {
   timestamp,
   real,
   integer,
-  jsonb,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -21,7 +21,7 @@ export const usersTable = pgTable('users', {
   pfp: text('pfp'),
   phone: text('phone'),
   gender: text('gender'),
-  age: bigint('age', { mode: 'bigint' }),
+  age: bigint('age', { mode: 'number' }),
   isEducator: boolean('is_educator').notNull().default(false),
   verified: boolean('verified').notNull().default(false),
   refreshToken: text("refresh_token"),
@@ -63,9 +63,20 @@ export const coursesTable = pgTable('courses', {
 export const categoryTable = pgTable('category', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
-  description: text('description').notNull(),
-  courseId: uuid('course_id').references(() => coursesTable.id),
+  description: text('description'),
 });
+
+// CATEGORY_COURSES TABLE
+export const categoryCoursesTable = pgTable(
+  'category_courses',
+  {
+    categoryId: uuid('category_id').notNull().references(() => categoryTable.id),
+    courseId: uuid('course_id').notNull().references(() => coursesTable.id),
+  },
+  (table) => ({
+    cpk: primaryKey({ name: 'composite_key', columns: [table.categoryId, table.courseId] }),
+  }),
+);
 
 // MODULES TABLE
 export const modulesTable = pgTable('modules', {
@@ -73,8 +84,8 @@ export const modulesTable = pgTable('modules', {
   courseId: uuid('course_id').notNull().references(() => coursesTable.id),
   name: text('name').notNull(),
   duration: real('duration'), // Using real() for float
-  videoCount: bigint('video_count', { mode: 'bigint' }),
-  materialCount: bigint('material_count', { mode: 'bigint' }),
+  videoCount: bigint('video_count', { mode: 'number' }),
+  materialCount: bigint('material_count', { mode: 'number' }),
 });
 
 export const studyMaterialsTable = pgTable('study_materials', {
@@ -91,7 +102,7 @@ export const studyMaterialsTable = pgTable('study_materials', {
 export const classesTable = pgTable('classes', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   moduleId: uuid('module_id').notNull().references(() => modulesTable.id),
-  views: bigint('views', { mode: 'bigint' }),
+  views: bigint('views', { mode: 'number' }),
   duration: timestamp('duration'),
   fileId: text('file_id'),
 });
@@ -160,11 +171,11 @@ export const contentTable = pgTable('content', {
   title: text('title').notNull(),
   description: text('description'),
   type: text('type').notNull(), // 'video' | 'document'
-  order: integer('order').notNull(),
+  order: integer('order').notNull(), // Represents the sequence of content within a module
   duration: real('duration'), // for videos
   fileUrl: text('file_url').notNull(),
   fileType: text('file_type'), // For study materials: 'pdf', 'doc', etc.
-  views: bigint('views', { mode: 'bigint' }).default(0n),
+  views: bigint('views', { mode: 'number' }).default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   isPreview: boolean('is_preview').default(false),

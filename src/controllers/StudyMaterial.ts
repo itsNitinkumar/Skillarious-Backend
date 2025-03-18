@@ -33,7 +33,7 @@ export const uploadStudyMaterial = async (req: CustomRequest, res: Response) => 
       order: parseInt(order) || 0,
       fileUrl: upload.url,
       fileType: Array.isArray(file) ? file[0].mimetype : file.mimetype,
-      views: 0n,
+      views: 0,  // Changed from 0n to 0
       createdAt: new Date(),
       updatedAt: new Date(),
       isPreview: Boolean(req.body.isPreview)
@@ -72,7 +72,7 @@ export const getModuleStudyMaterials = async (req: Request, res: Response) => {
     // Increment views for each material
     await Promise.all(materials.map(material => 
       db.update(contentTable)
-        .set({ views: (material.views || 0n) + 1n })
+        .set({ views: (material.views || 0) + 1 })
         .where(eq(contentTable.id, material.id))
     ));
 

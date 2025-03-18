@@ -1,12 +1,27 @@
 import express from "express";
 const router = express.Router();
-import {createCourse,updateCourse,deleteCourse,getAllCourses,getSingleCourse,searchCourses,getCoursesByCategory,getCoursesByEducator} from '../controllers/Course.ts';
-router.post("/create", createCourse as unknown as express.RequestHandler);
-router.put("/update/:id", updateCourse as unknown as express.RequestHandler);  // Changed from POST to PUT
-router.delete("/delete/:id",deleteCourse as unknown as express.RequestHandler);
-router.post("/all",getAllCourses as unknown as express.RequestHandler);
-router.post("/single",getSingleCourse as unknown as express.RequestHandler);
-router.get('/search', searchCourses as unknown as express.RequestHandler); 
-router.get('/category/:category', getCoursesByCategory as unknown as express.RequestHandler);
+import { authenticateUser } from '../controllers/Auth.ts';
+import {
+    createCourse,
+    updateCourse,
+    deleteCourse,
+    getAllCourses,
+    getSingleCourse,
+    searchCourses,
+    //getCoursesByCategory,
+    getCoursesByEducator
+} from '../controllers/Course.ts';
+
+// Protected routes (require authentication)
+router.post("/create", authenticateUser as unknown as express.RequestHandler, createCourse as unknown as express.RequestHandler);
+router.put("/update/:CourseId", authenticateUser as unknown as express.RequestHandler, updateCourse as unknown as express.RequestHandler);
+router.delete("/delete/:CourseId", authenticateUser as unknown as express.RequestHandler, deleteCourse as unknown as express.RequestHandler);
+
+// Public routes (no authentication required)
+router.get("/all", getAllCourses as unknown as express.RequestHandler); // Changed from POST to GET
+router.get("/single/:id", getSingleCourse as unknown as express.RequestHandler); // Changed from POST to GET and added :id parameter
+router.get('/search', searchCourses as unknown as express.RequestHandler);
+// router.get('/category/:category', getCoursesByCategory as unknown as express.RequestHandler);
 router.get('/educator/:id', getCoursesByEducator as unknown as express.RequestHandler);
+
 export default router;

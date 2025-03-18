@@ -7,7 +7,7 @@ import courseRoute from "./src/routes/course.ts";
 import paymentRoute from "./src/routes/payment.ts";
 import reviewRoute from "./src/routes/review.ts";
 import educatorRoute from "./src/routes/educator.ts";
-
+import contentRoute from "./src/routes/content.ts";
 const app = express();
 dotenv.config();
 app.use(express.json());
@@ -19,6 +19,7 @@ app.use("/api/v1/courses", courseRoute);
 app.use("/api/v1/payments", paymentRoute);
 app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/educators", educatorRoute);
+app.use("/api/v1/content", contentRoute);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT,() => {

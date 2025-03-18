@@ -4,17 +4,58 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Create Supabase client with realtime enabled
 export const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.SUPABASE_ANON_KEY!,
+  {
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
+    }
+  }
 );
 
-// Configure Cloudinary
+// Initialize realtime channels
+const doubtChannel = supabase.channel('doubt-changes')
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'doubts'
+    },
+    (payload) => {
+      console.log('Doubt change:', payload);
+      // You can add custom logic here if needed
+    }
+  )
+  .subscribe();
+
+const messageChannel = supabase.channel('message-changes')
+  .on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'messages'
+    },
+    (payload) => {
+      console.log('Message change:', payload);
+      // You can add custom logic here if needed
+    }
+  )
+  .subscribe();
+
+// Existing Cloudinary configuration
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+export { doubtChannel, messageChannel };
 
 export const uploadMedia = async (file: any, type: 'video' | 'image' | 'document') => {
   try {
@@ -39,3 +80,4 @@ export const deleteMedia = async (public_id: string) => {
     throw new Error(`Error deleting from Cloudinary: ${error}`);
   }
 };
+

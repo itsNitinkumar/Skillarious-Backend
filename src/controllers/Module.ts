@@ -2,7 +2,14 @@ import { Request, Response } from 'express';
 import { db } from '../db/index.ts';
 import { modulesTable } from '../db/schema.ts';
 
-export const createModule = async (req: Request, res: Response): Promise<void> => {
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    isEducator: boolean;
+  }
+}
+
+export const createModule = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { courseId, name, duration, videoCount, materialCount } = req.body;
 
@@ -11,6 +18,15 @@ export const createModule = async (req: Request, res: Response): Promise<void> =
       res.status(400).json({
         success: false,
         message: 'Course ID and name are required'
+      });
+      return;
+    }
+
+    // Check if user is authenticated and an educator
+    if (!req.user || !req.user.isEducator) {
+      res.status(403).json({
+        success: false,
+        message: 'Only authenticated educators can create modules'
       });
       return;
     }
@@ -39,3 +55,4 @@ export const createModule = async (req: Request, res: Response): Promise<void> =
     });
   }
 };
+

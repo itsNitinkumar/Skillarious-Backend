@@ -1,18 +1,34 @@
 import {Request,Response} from 'express';
 import {db} from '../db/index.ts';
-import{coursesTable, educatorsTable, categoryTable, transactionsTable} from '../db/schema.ts';
+import{coursesTable, educatorsTable, categoryTable, transactionsTable, usersTable} from '../db/schema.ts';
 import { eq,or,sql, and } from 'drizzle-orm';
 
+interface AuthenticatedRequest extends Request {
+    user: {
+        id: string;
+        email: string;
+    };
+}
+
 // 1) Controller to create a course
-export const createCourse = async (req: Request, res: Response): Promise<Response> => {
+export const createCourse = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
  try{
-    const {name,description,about,educatorId,price} = req.body;
-    if(!name || !description || !educatorId || !price || about === undefined){
+    const {name,description,about,price} = req.body;
+    const {id} = req.user;
+    if(!name || !description  || !price || about === undefined){
         return res.status(400).json({
             success: false,
             message: 'Required fields are missing'
         });
     }
+  const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+    if(!isEducator){
+        return res.status(403).json({
+            success: false,
+            message: 'Only educators can create courses'
+        });
+    }
+    const educatorId = await db.select().from(educatorsTable).where(eq(educatorsTable.userId, id)).then((data) => data[0].id);
     // insert into database
     const newCourse = await db.insert(coursesTable).values({
         name,
@@ -47,19 +63,31 @@ export const createCourse = async (req: Request, res: Response): Promise<Respons
 
 // 2) controller for updating the course
 
-export const updateCourse = async(req: Request, res:Response):Promise<Response> => {
+export const updateCourse = async(req: AuthenticatedRequest, res:Response):Promise<Response> => {
     try {
-        const {id} = req.params;
+        const {CourseId} = req.params;
         const {name, description, about, price} = req.body;
+        const {id} = req.user; // Get the user ID from the request
         
-        // First check if course exists
-        const course = await db.select().from(coursesTable).where(eq(coursesTable.id,id));
-        if(!course.length){
-            return res.status(404).json({ 
-                success: false,
-                message: 'Course not found' 
-            });
-        }
+        const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+    if (!isEducator) {
+        return res.status(403).json({ message: 'Only educators can update courses' });
+    }
+
+    // Check if the course belongs to the educator
+    const courseWithEducator = await db
+        .select()
+        .from(coursesTable)
+        .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+        .where(and(
+            eq(coursesTable.id, CourseId),
+            eq(educatorsTable.userId, id)
+        ));
+        
+
+    if (!courseWithEducator.length) {
+        return res.status(403).json({ message: 'You are not authorized to update this course' });
+    }
 
         // Create an update object with only defined values
         const updateData: Record<string, any> = {};
@@ -98,23 +126,36 @@ export const updateCourse = async(req: Request, res:Response):Promise<Response> 
     }
 };
   // 3)  controller for deleting the course
- export const deleteCourse = async (req: Request, res: Response): Promise<Response> => {
+ export const deleteCourse = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   try {
-    const { id } = req.params; // Course ID from URL
-  
-    if (!id) {
+    const { id } = req.user;
+    const { CourseId } = req.params; // Course ID from URL
+    
+    if (!CourseId) {
       return res.status(400).json({ message: 'Course ID is required' });
     }
+    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+    if (!isEducator) {
+        return res.status(403).json({ message: 'Only educators can delete courses' });
+    }
 
-    // Check if course exists
-    const course = await db.select().from(coursesTable).where(eq(coursesTable.id, id));
+    // Check if the course belongs to the educator
+    const courseWithEducator = await db
+        .select()
+        .from(coursesTable)
+        .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+        .where(and(
+            eq(coursesTable.id, CourseId),
+            eq(educatorsTable.userId, id)
+        ));
+        
 
-    if (!course.length) {
-      return res.status(404).json({ message: 'Course not found' });
+    if (!courseWithEducator.length) {
+        return res.status(403).json({ message: 'You are not authorized to delete this course' });
     }
 
     // Delete course
-    await db.delete(coursesTable).where(eq(coursesTable.id, id));
+    await db.delete(coursesTable).where(eq(coursesTable.id, CourseId));
 
     return res.status(200).json({ 
         success:true,
@@ -231,7 +272,7 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
   };
 // 6) controller for get courses by category
 
-export const getCoursesByCategory = async (req: Request, res: Response): Promise<Response> => {
+ /*export const getCoursesByCategory = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { category } = req.params;
 
@@ -264,8 +305,7 @@ export const getCoursesByCategory = async (req: Request, res: Response): Promise
   } catch (error) {
     console.error('Error fetching courses by category:', error);
     return res.status(500).json({ message: 'Error fetching courses' });
-  }
-};
+  }};*/
 // 7)  controller for specific educator
 
 export const getCoursesByEducator = async (req: Request, res: Response): Promise<Response> => {

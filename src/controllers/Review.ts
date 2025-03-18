@@ -33,6 +33,7 @@ export const createReview = async (req: AuthenticatedRequest, res: Response) => 
                     eq(transactionsTable.status, 'completed')
                 )
             );
+            //console.log(transaction);
 
         if (!transaction.length) {
             return res.status(403).json({

@@ -2,13 +2,17 @@ import nodemailer from "nodemailer";
 import { text } from "stream/consumers";
 const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
-    port: 587,
-    secure: false, // true for port 465, false for other ports
+    port: 465, // Changed from 587 to 465
+    secure: true, // Changed to true since we're using port 465
     auth: {
       user: "kumaranish0750@gmail.com",
       pass: "rzyb rtgj qkod dofe",
     },
-  });
+    tls: {
+      // Do not fail on invalid certs
+      rejectUnauthorized: false
+    }
+});
 
   export const sendEmail = async(email:string, subject: string, message: string) => {
     try{
