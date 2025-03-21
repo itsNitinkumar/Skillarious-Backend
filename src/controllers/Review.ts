@@ -66,7 +66,8 @@ export const createReview = async (req: AuthenticatedRequest, res: Response) => 
                 userId,
                 courseId,
                 rating,
-                message
+                message,
+                createdAt: new Date()
             })
             .returning();
 
@@ -249,3 +250,5 @@ export const deleteReview = async (req: AuthenticatedRequest, res: Response) => 
         });
     }
 };
+
+

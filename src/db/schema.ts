@@ -25,6 +25,8 @@ export const usersTable = pgTable('users', {
   isEducator: boolean('is_educator').notNull().default(false),
   verified: boolean('verified').notNull().default(false),
   refreshToken: text("refresh_token"),
+  isAdmin: boolean('is_admin').default(false).notNull(),
+  role: text('role').default('user').notNull(), // 'user', 'educator', 'admin'
 });
 
 // OTPS TABLE
@@ -62,7 +64,7 @@ export const coursesTable = pgTable('courses', {
 // CATEGORY TABLE
 export const categoryTable = pgTable('category', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  name: text('name').notNull(),
+  name: text('name').notNull().unique(),
   description: text('description'),
 });
 
@@ -88,16 +90,6 @@ export const modulesTable = pgTable('modules', {
   materialCount: bigint('material_count', { mode: 'number' }),
 });
 
-export const studyMaterialsTable = pgTable('study_materials', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  moduleId: uuid('module_id').references(() => modulesTable.id),
-  title: text('title').notNull(),
-  description: text('description'),
-  fileUrl: text('file_url').notNull(),
-  fileType: text('file_type').notNull(),
-  uploadDate: timestamp('upload_date').notNull()
-});
-
 // CLASSES TABLE
 export const classesTable = pgTable('classes', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
@@ -114,7 +106,8 @@ export const reviewsTable = pgTable('reviews', {
   educatorId: uuid('educator_id').references(() => educatorsTable.id),
   courseId: uuid('course_id').references(() => coursesTable.id),
   message: text('message'),
-  rating: real('rating').notNull(), // float => real
+  rating: real('rating').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow()
 });
 
 // TRANSACTIONS TABLE
@@ -170,75 +163,22 @@ export const contentTable = pgTable('content', {
   moduleId: uuid('module_id').notNull().references(() => modulesTable.id),
   title: text('title').notNull(),
   description: text('description'),
-  type: text('type').notNull(), // 'video' | 'document'
-  order: integer('order').notNull(), // Represents the sequence of content within a module
-  duration: real('duration'), // for videos
+  order: integer('order').notNull(),
   fileUrl: text('file_url').notNull(),
-  fileType: text('file_type'), // For study materials: 'pdf', 'doc', etc.
+  type: text('type').notNull(), // Instead of fileType
   views: bigint('views', { mode: 'number' }).default(0),
+  duration: real('duration'), // Optional: for video/audio files
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   isPreview: boolean('is_preview').default(false),
 });
 
-// Progress tracking for content
-export const progressTable = pgTable('progress', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  userId: uuid('user_id').notNull().references(() => usersTable.id),
-  contentId: uuid('content_id').notNull().references(() => contentTable.id),
-  completed: boolean('completed').default(false),
-  lastAccessed: timestamp('last_accessed').notNull(),
-  timeSpent: integer('time_spent').default(0), // in seconds
-});
 
-// COURSE ENROLLMENT
-export const enrollmentTable = pgTable('enrollment', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  userId: uuid('user_id').notNull().references(() => usersTable.id),
-  courseId: uuid('course_id').notNull().references(() => coursesTable.id),
-  enrolledAt: timestamp('enrolled_at').notNull().defaultNow(),
-  status: text('status').notNull().default('active'), // 'active' | 'completed' | 'dropped'
-  completionCertificate: text('completion_certificate'),
-  completedAt: timestamp('completed_at'),
-  lastAccessed: timestamp('last_accessed'),
-});
-
-// Add enrollmentProgress to track overall course progress
-export const enrollmentProgressTable = pgTable('enrollment_progress', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  enrollmentId: uuid('enrollment_id').notNull().references(() => enrollmentTable.id),
-  moduleId: uuid('module_id').notNull().references(() => modulesTable.id),
-  completedContent: integer('completed_content').default(0),
-  totalContent: integer('total_content').notNull(),
-  lastAccessed: timestamp('last_accessed').notNull(),
-  completedAt: timestamp('completed_at'),
-});
-
-// Add notifications for course updates, doubts, etc.
-export const notificationsTable = pgTable('notifications', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  userId: uuid('user_id').notNull().references(() => usersTable.id),
-  type: text('type').notNull(), // 'doubt_response', 'course_update', etc.
-  title: text('title').notNull(),
-  message: text('message').notNull(),
-  read: boolean('read').default(false),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  relatedId: uuid('related_id'), // Could be doubtId, courseId, etc.
-});
 
 // Type definitions
 export type Content = typeof contentTable.$inferSelect;
 export type InsertContent = typeof contentTable.$inferInsert;
 
-export type Progress = typeof progressTable.$inferSelect;
-export type InsertProgress = typeof progressTable.$inferInsert;
-
-export type Enrollment = typeof enrollmentTable.$inferSelect;
-export type InsertEnrollment = typeof enrollmentTable.$inferInsert;
-
-// -------------------------------------------------------
-//                  TYPE DEFINITIONS
-// -------------------------------------------------------
 export type InsertUser = typeof usersTable.$inferInsert;
 export type SelectUser = typeof usersTable.$inferSelect;
 
@@ -254,8 +194,6 @@ export type SelectCategory = typeof categoryTable.$inferSelect;
 export type InsertModule = typeof modulesTable.$inferInsert;
 export type SelectModule = typeof modulesTable.$inferSelect;
 
-export type InsertStudyMaterial = typeof studyMaterialsTable.$inferInsert;
-export type SelectStudyMaterial = typeof studyMaterialsTable.$inferSelect;
 
 export type InsertClass = typeof classesTable.$inferInsert;
 export type SelectClass = typeof classesTable.$inferSelect;

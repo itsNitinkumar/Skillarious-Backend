@@ -1,6 +1,6 @@
 import {Request,Response} from 'express';
 import {db} from '../db/index.ts';
-import{coursesTable, educatorsTable, categoryTable, transactionsTable, usersTable} from '../db/schema.ts';
+import{coursesTable, educatorsTable, categoryTable, transactionsTable, usersTable, categoryCoursesTable} from '../db/schema.ts';
 import { eq,or,sql, and } from 'drizzle-orm';
 
 interface AuthenticatedRequest extends Request {
@@ -242,24 +242,32 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
 
   export const searchCourses = async (req: Request, res: Response): Promise<Response> => {
     try {
-      const { query } = req.query;
+      const { name,description,about } = req.query;
   
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ message: 'Invalid search query' });
+      if (!name &&!description && !about) {
+        return res.status(400).json({ message: 'Search query is required' });
       }
   
       // Using SQL raw query for searching (ILIKE for case-insensitive search)
       const courses = await db
-        .select()
+        .select({
+          id: coursesTable.id,
+          name: coursesTable.name,
+          description: coursesTable.description,
+          about: coursesTable.about,
+          price: coursesTable.price,
+          educatorId: coursesTable.educatorId,
+           })
         .from(coursesTable)
+        .leftJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
         .where(
           or(
-            sql`${coursesTable.name} ILIKE ${'%' + query + '%'}`,
-            sql`${coursesTable.description} ILIKE ${'%' + query + '%'}`,
-            sql`${coursesTable.about} ILIKE ${'%' + query + '%'}`
+            sql`${coursesTable.name} ILIKE ${ name + '%'}`,
+            sql`${coursesTable.description} ILIKE ${description + '%'}`,
+            sql`${coursesTable.about} ILIKE ${ about + '%'}`
           )
         );
-  
+      
       return res.status(200).json({
         message: 'Courses searched successfully',
         courses,
@@ -270,16 +278,48 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
       return res.status(500).json({ message: 'Error searching courses' });
     }
   };
+//   controller for add categories
+
+export const addCategory = async (req: AuthenticatedRequest, res: Response): Promise<Response>  => {
+  try{
+    const {id} = req.user;
+    const {categoryId,courseId} = req.body;
+    if(!categoryId || !courseId){
+      return res.status(400).json({
+        success: false,
+        message: 'Required fields are missing'
+      });
+    }
+    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+    if(!isEducator){
+      return res.status(403).json({
+        success: false,
+        message: 'Only educators can add categories'
+      });
+    }
+    const category = await db.insert(categoryCoursesTable).values({
+      categoryId,
+      courseId
+    }).returning();
+    return res.status(201).json({
+      success: true,
+      message: 'Category added successfully',
+      data: category[0]
+    });
+    }catch(error){
+    console.error('Error adding category:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error adding category'
+    });
+  }
+
+}
 // 6) controller for get courses by category
 
- /*export const getCoursesByCategory = async (req: Request, res: Response): Promise<Response> => {
+ export const getCoursesByCategory = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { category } = req.params;
-
-    if (!category) {
-      return res.status(400).json({ message: 'Category is required' });
-    }
-
+    const { query} = req.query;
     const courses = await db
       .select({
         id: coursesTable.id,
@@ -292,10 +332,14 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
       })
       .from(coursesTable)
       .innerJoin(
-        categoryTable,
-        eq(categoryTable.courseId, coursesTable.id)
+        categoryCoursesTable,
+        eq(categoryCoursesTable.courseId, coursesTable.id)
       )
-      .where(eq(categoryTable.name, category));
+      .innerJoin(
+        categoryTable,
+        eq(categoryTable.id, categoryCoursesTable.categoryId)
+      )
+      .where(sql`${categoryTable.name} ILIKE ${query + '%'}`);
 
     return res.status(200).json({
       message: 'Courses fetched successfully',
@@ -305,7 +349,7 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
   } catch (error) {
     console.error('Error fetching courses by category:', error);
     return res.status(500).json({ message: 'Error fetching courses' });
-  }};*/
+  }};
 // 7)  controller for specific educator
 
 export const getCoursesByEducator = async (req: Request, res: Response): Promise<Response> => {

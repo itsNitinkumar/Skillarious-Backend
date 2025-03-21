@@ -211,3 +211,21 @@ export const transaction = pgTable("transaction", {
 			name: "transaction_user_id_users_id_fk"
 		}),
 ]);
+
+export const contentTable = pgTable('content', {
+	id: uuid().primaryKey().notNull(),
+	moduleId: uuid("module_id").notNull(),
+	fileId: text("file_id").notNull(),
+	fileType: text('file_type').notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.moduleId],
+			foreignColumns: [modules.id],
+			name: "content_module_id_modules_id_fk"
+		}),
+]);
+
+
+
+
+

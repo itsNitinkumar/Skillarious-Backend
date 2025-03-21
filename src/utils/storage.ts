@@ -1,6 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { UploadedFile } from 'express-fileupload';
+import path from 'path';
 
 dotenv.config();
 
@@ -28,7 +30,6 @@ const doubtChannel = supabase.channel('doubt-changes')
     },
     (payload) => {
       console.log('Doubt change:', payload);
-      // You can add custom logic here if needed
     }
   )
   .subscribe();
@@ -43,7 +44,6 @@ const messageChannel = supabase.channel('message-changes')
     },
     (payload) => {
       console.log('Message change:', payload);
-      // You can add custom logic here if needed
     }
   )
   .subscribe();
@@ -57,18 +57,46 @@ cloudinary.config({
 
 export { doubtChannel, messageChannel };
 
-export const uploadMedia = async (file: any, type: 'video' | 'image' | 'document') => {
+export const uploadMedia = async (file: UploadedFile) => {
   try {
-    const result = await cloudinary.uploader.upload(file.path, {
-      resource_type: type === 'video' ? 'video' : 'auto',
-      folder: `eduplatform/${type}s`
+    // Validate file
+    if (!file || !file.tempFilePath) {
+      throw new Error('Invalid file object');
+    }
+
+    // Set upload options based on file type
+    const cleanFileName = file.name
+      .split('.')[0]
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .toLowerCase();
+
+    const result = await cloudinary.uploader.upload(file.tempFilePath, {
+      resource_type: 'auto',
+      folder: 'skillarious/materials',
+      public_id: `${Date.now()}-${cleanFileName}`,
+      unique_filename: true,
+  
     });
+
     return {
+      fileName: file.name,
+      tempPath: file.tempFilePath,
+      mimeType: file.mimetype,
+      size: file.size,
       url: result.secure_url,
-      public_id: result.public_id
+      public_id: result.public_id,
     };
-  } catch (error) {
-    throw new Error(`Error uploading to Cloudinary: ${error}`);
+
+  } catch (error: any) {
+    // Detailed error logging
+    console.error('Cloudinary Upload Error:', {
+      error: error.message,
+      details: error.error || error,
+      file: file.name,
+      tempPath: file.tempFilePath
+    });
+
+    throw new Error(`Upload failed: ${error.message}`);
   }
 };
 
@@ -80,4 +108,6 @@ export const deleteMedia = async (public_id: string) => {
     throw new Error(`Error deleting from Cloudinary: ${error}`);
   }
 };
+
+
 

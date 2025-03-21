@@ -8,9 +8,15 @@ import paymentRoute from "./src/routes/payment.ts";
 import reviewRoute from "./src/routes/review.ts";
 import educatorRoute from "./src/routes/educator.ts";
 import contentRoute from "./src/routes/content.ts";
+import fileUpload from 'express-fileupload';
 const app = express();
 dotenv.config();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(fileUpload({
+  useTempFiles: true,
+  tempFileDir: '/tmp/'
+}));
 app.use(cors());
 
 app.use("/api/v1/auth", authRoute);

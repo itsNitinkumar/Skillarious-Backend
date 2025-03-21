@@ -43,6 +43,27 @@
       "when": 1742280589482,
       "tag": "0005_clear_mattie_franklin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1742371477839,
+      "tag": "0006_cheerful_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1742562273492,
+      "tag": "0007_tearful_absorbing_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1742563453915,
+      "tag": "0008_previous_tusk",
+      "breakpoints": true
     }
   ]
 }
