@@ -64,6 +64,13 @@
       "when": 1742563453915,
       "tag": "0008_previous_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1742795155441,
+      "tag": "0009_tiny_black_tarantula",
+      "breakpoints": true
     }
   ]
 }

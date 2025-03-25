@@ -1,14 +1,15 @@
 import crypto from "crypto";
 import {NextFunction, Request,Response} from "express";
 import {db} from "../db/index.ts";
-import {otpsTable as otps} from "../db/schema.ts";
+import {otpsTable as otps, usersTable} from "../db/schema.ts";
 import {sendEmail} from "../utils/sendEmail.ts";
 import {eq} from "drizzle-orm";
 import {desc} from "drizzle-orm";
+import { generateAccessToken, generateRefreshToken } from "../utils/generateToken.ts";
 
-/////we will generate otp through RLC6238TOTP////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////
-//generating the otp
+// we will generate otp through RLC6238TOTP
+// --------------------------------------------------------------------------------
+// generating the otp
 export const generateOtp = async(req: Request, res: Response): Promise<void>  => {
     try{
         const{email} =req.body;
@@ -47,8 +48,6 @@ export const generateOtp = async(req: Request, res: Response): Promise<void>  =>
 // otp verification
 export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
     try {
-
-        console.log(req.body);
         const { email, otp } =  req.body;
         if (!email || !otp) {
             res.status(400).json({success: false, message: "Email and OTP are required"})
@@ -70,11 +69,35 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
             return ;
         }
 
-        // Delete OTP after verification
-        await db.delete(otps).where(eq(otps.email, email));
+        await db.update(usersTable).set({verified : true}).where(eq(usersTable.email, email));
 
-        res.status(200).json({ success: true, message: "OTP verified successfully" });
-        return;
+        await db.delete(otps).where(eq(otps.email, email));
+        
+        const [user] = await db.select()
+            .from(usersTable)
+            .where(eq(usersTable.email, email))
+            .limit(1);
+
+        if (!user) {
+            res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+            return;
+        }
+
+        const accessToken = generateAccessToken(user.id, user.email);
+        const refreshToken = generateRefreshToken(user.id);
+    
+        await db.update(usersTable).set({ refreshToken }).where(eq(usersTable.id, user.id));
+    
+        res.status(200).json({
+            success: true,
+            message: "OTP verified successfully",
+            accessToken,
+            refreshToken,  
+        });return;
+
 
     } catch (error) {
         console.log('nitin\'s error -> ', error);

@@ -381,35 +381,34 @@ export const getModuleStudyMaterials = async (req: Request, res: Response): Prom
   }
 };
 
+export const moderateStudyMaterial = {
+  dismissMaterial: async (req: Request, res: Response) => {
+    try {
+      const { materialId } = req.params;
+      const { reason } = req.body;
 
+      const dismissedMaterial = await db
+        .update(contentTable)
+        .set({ 
+          isDismissed: true,
+          dismissReason: reason,
+          dismissedAt: new Date()
+        })
+        .where(eq(contentTable.id, materialId))
+        .returning();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      return res.status(200).json({
+        success: true,
+        message: 'Study material dismissed successfully',
+        data: dismissedMaterial[0]
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error dismissing study material'
+      });
+    }
+  }
+};
 
 

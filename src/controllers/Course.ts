@@ -92,10 +92,10 @@ export const updateCourse = async(req: AuthenticatedRequest, res:Response):Promi
         // Create an update object with only defined values
         const updateData: Record<string, any> = {};
         
-        if (name !== undefined) updateData.name = name;
-        if (description !== undefined) updateData.description = description;
-        if (about !== undefined) updateData.about = about;
-        if (price !== undefined) updateData.price = price.toString();
+         updateData.name = name;
+        updateData.description = description;
+        updateData.about = about;
+         updateData.price = price.toString();
 
         // Only perform update if there are fields to update
         if (Object.keys(updateData).length === 0) {

@@ -2,10 +2,10 @@
   "name": "skillarious",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.ts",
+  "main": "server.ts",
   "scripts": {
     "start": "node server.ts",
-    "dev": "nodemon --exec \"node --import ./register-ts-node.js\" server.ts"
+    "dev": "nodemon --exec tsx server.ts"
   },
   "keywords": [],
   "author": "",
@@ -26,7 +26,8 @@
     "nodemon": "^3.1.9",
     "postgres": "^3.4.5",
     "prettier": "^3.4.2",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -37,6 +38,7 @@
     "drizzle-kit": "^0.30.5",
     "drizzle-orm": "^0.40.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
     "typescript": "^5.7.3"
   }
 }

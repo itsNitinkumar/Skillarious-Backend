@@ -20,11 +20,11 @@ export const isAdmin = async (req: AuthenticatedRequest, res: Response, next: Ne
       });
     }
 
-    const user = await db
+    const [user] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.id, userId))
-      .then(rows => rows[0]);
+      .limit(1);
 
     if (!user?.isAdmin) {
       return res.status(403).json({
@@ -41,3 +41,4 @@ export const isAdmin = async (req: AuthenticatedRequest, res: Response, next: Ne
     });
   }
 };
+

@@ -1,18 +1,377 @@
 import { Request, Response } from 'express';
 import { db } from '../db';
 import { 
-  usersTable, 
-  coursesTable, 
+  usersTable,
+  adminLogsTable,
+  coursesTable,
   modulesTable,
   contentTable,
-  educatorsTable,
-  categoryTable,
   categoryCoursesTable,
-  transactionsTable,
-  reviewsTable,
+  categoryTable,
   doubtsTable,
+  educatorsTable,
+  reviewsTable,
+  transactionsTable
 } from '../db/schema';
-import { eq, and, sql, desc, count, avg, SQL } from 'drizzle-orm';
+import { and, avg, desc, eq, sql, SQL,count } from 'drizzle-orm';
+import { AdminActionInput } from '../schemas/admin';
+
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    isAdmin: boolean;
+    role: string;
+  };
+}
+
+// Moderation Controllers
+export const moderateUser = {
+  banUser: async (req: AuthenticatedRequest & AdminActionInput, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const { reason } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        });
+      }
+
+      const targetUser = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .then(rows => rows[0]);
+
+      if (!targetUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      if (targetUser.isBanned) {
+        return res.status(400).json({
+          success: false,
+          message: 'User is already banned'
+        });
+      }
+
+      if (targetUser.isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Cannot ban an admin user'
+        });
+      }
+
+      const bannedUser = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(usersTable)
+          .set({
+            isBanned: true,
+            banReason: reason,
+            bannedAt: new Date()
+          })
+          .where(eq(usersTable.id, userId))
+          .returning();
+
+        await tx.insert(adminLogsTable).values({
+          adminId: req.user.id,
+          action: 'BAN_USER',
+          targetId: userId,
+          metadata: {
+            reason,
+            targetEmail: targetUser.email,
+            targetName: targetUser.name
+          }
+        });
+
+        return updated[0];
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'User banned successfully',
+        data: bannedUser
+      });
+
+    } catch (error) {
+      console.error('Error in banUser:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error banning user'
+      });
+    }
+  },
+
+  unbanUser: async (req: AuthenticatedRequest & AdminActionInput, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const { reason } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        });
+      }
+
+      const targetUser = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .then(rows => rows[0]);
+
+      if (!targetUser) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      if (!targetUser.isBanned) {
+        return res.status(400).json({
+          success: false,
+          message: 'User is not banned'
+        });
+      }
+
+      const unbannedUser = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(usersTable)
+          .set({
+            isBanned: false,
+            banReason: null,
+            bannedAt: null,
+            // bannedBy: null
+          })
+          .where(eq(usersTable.id, userId))
+          .returning();
+
+        await tx.insert(adminLogsTable).values({
+          adminId: req.user.id,
+          action: 'UNBAN_USER',
+          targetId: userId,
+          metadata: {
+            reason,
+            previousBanReason: targetUser.banReason
+          }
+        });
+
+        return updated[0];
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'User unbanned successfully',
+        data: unbannedUser
+      });
+
+    } catch (error) {
+      console.error('Error in unbanUser:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error unbanning user'
+      });
+    }
+  }
+};
+
+export const moderateCourse = {
+  dismissCourse: async (req: Request, res: Response) => {
+    try {
+      const { courseId } = req.params;
+      const { reason } = req.body;
+
+      const dismissedCourse = await db
+        .update(coursesTable)
+        .set({ 
+          isDismissed: true,
+          dismissReason: reason,
+          dismissedAt: new Date()
+        })
+        .where(eq(coursesTable.id, courseId))
+        .returning();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Course dismissed successfully',
+        data: dismissedCourse[0]
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error dismissing course'
+      });
+    }
+  }
+};
+
+export const moderateModule = {
+  dismissModule: async (req: Request, res: Response) => {
+    try {
+      const { moduleId } = req.params;
+      const { reason } = req.body;
+
+      const dismissedModule = await db
+        .update(modulesTable)
+        .set({ 
+          isDismissed: true,
+          dismissReason: reason,
+          dismissedAt: new Date()
+        })
+        .where(eq(modulesTable.id, moduleId))
+        .returning();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Module dismissed successfully',
+        data: dismissedModule[0]
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error dismissing module'
+      });
+    }
+  }
+};
+
+export const moderateContent = {
+  dismissContent: async (req: Request, res: Response) => {
+    try {
+      const { contentId } = req.params;
+      const { reason } = req.body;
+
+      const dismissedContent = await db
+        .update(contentTable)
+        .set({ 
+          isDismissed: true,
+          dismissReason: reason,
+          dismissedAt: new Date()
+        })
+        .where(eq(contentTable.id, contentId))
+        .returning();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Content dismissed successfully',
+        data: dismissedContent[0]
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Error dismissing content'
+      });
+    }
+  }
+};
+
+// Analytics Controllers
+export const getUserAnalytics = async (req: Request, res: Response) => {
+  try {
+    const analytics = await db
+      .select({
+        totalUsers: count(usersTable.id),
+        activeUsers: sql<number>`COUNT(CASE WHEN last_login >= NOW() - INTERVAL '30 days' THEN 1 END)`,
+        bannedUsers: sql<number>`COUNT(CASE WHEN is_banned = true THEN 1 END)`,
+        newUsersThisMonth: sql<number>`COUNT(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 END)`,
+        verifiedUsers: sql<number>`COUNT(CASE WHEN verified = true THEN 1 END)`,
+        educatorCount: sql<number>`COUNT(CASE WHEN is_educator = true THEN 1 END)`
+      })
+      .from(usersTable);
+
+    return res.status(200).json({
+      success: true,
+      data: analytics[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching user analytics'
+    });
+  }
+};
+
+export const getEngagementAnalytics = async (req: Request, res: Response) => {
+  try {
+    const analytics = await db
+      .select({
+        // Course Engagement
+        totalEnrollments: sql<number>`COUNT(DISTINCT ${transactionsTable.courseId})`,
+        averageCourseCompletion: sql<number>`AVG(completion_rate)`,
+        
+        // Content Engagement
+        totalContentViews: sql<number>`SUM(view_count)`,
+        averageTimeSpent: sql<number>`AVG(time_spent)`,
+        
+        // Interaction Metrics
+        totalDoubts: sql<number>`COUNT(DISTINCT ${doubtsTable.id})`,
+        resolvedDoubts: sql<number>`COUNT(CASE WHEN ${doubtsTable.resolved} = true THEN 1 END)`,
+        averageResponseTime: sql<number>`AVG(response_time)`,
+        
+        // Review Metrics
+        totalReviews: sql<number>`COUNT(DISTINCT ${reviewsTable.id})`,
+        averageRating: avg(reviewsTable.rating),
+        
+        // Study Material Usage
+        totalMaterialDownloads: sql<number>`SUM(download_count)`,
+        uniqueStudentEngagement: sql<number>`COUNT(DISTINCT user_id)`
+      })
+      .from(coursesTable)
+      .leftJoin(transactionsTable, eq(coursesTable.id, transactionsTable.courseId))
+      .leftJoin(modulesTable, eq(coursesTable.id, modulesTable.courseId))
+      .leftJoin(contentTable, eq(modulesTable.id, contentTable.moduleId))
+      .leftJoin(doubtsTable, eq(contentTable.id, doubtsTable.contentId))
+      .leftJoin(reviewsTable, eq(coursesTable.id, reviewsTable.courseId));
+
+    return res.status(200).json({
+      success: true,
+      data: analytics[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching engagement analytics'
+    });
+  }
+};
+
+export const getRevenueAnalytics = async (req: Request, res: Response) => {
+  try {
+    const analytics = await db
+      .select({
+        totalRevenue: sql<number>`SUM(${transactionsTable.amount})`,
+        monthlyRevenue: sql<number>`SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN amount END)`,
+        averageTransactionValue: avg(transactionsTable.amount),
+        successfulTransactions: sql<number>`COUNT(CASE WHEN status = 'completed' THEN 1 END)`,
+        failedTransactions: sql<number>`COUNT(CASE WHEN status = 'failed' THEN 1 END)`,
+        topPerformingCourses: sql`
+          SELECT 
+            c.name,
+            COUNT(t.id) as sales,
+            SUM(t.amount) as revenue
+          FROM courses c
+          JOIN transactions t ON c.id = t.course_id
+          GROUP BY c.id, c.name
+          ORDER BY revenue DESC
+          LIMIT 5
+        `
+      })
+      .from(transactionsTable);
+
+    return res.status(200).json({
+      success: true,
+      data: analytics[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching revenue analytics'
+    });
+  }
+};
 
 // Platform Overview Analytics
 export const getPlatformOverview = async (req: Request, res: Response) => {
@@ -210,22 +569,6 @@ export const getEducatorAnalytics = async (req: Request, res: Response) => {
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

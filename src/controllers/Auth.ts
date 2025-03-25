@@ -1,5 +1,5 @@
 import { db } from "../db/index.ts";
-import {usersTable as users} from "../db/schema.ts"
+import {usersTable as users, usersTable} from "../db/schema.ts"
 import {eq} from "drizzle-orm";
 import {config} from "dotenv";
 import bcrypt from "bcrypt";
@@ -12,7 +12,13 @@ interface AuthenticatedRequest extends Request {
   user?: any; // You can replace 'any' with a more specific type for your user
 }
 
-config({path: ".env.local"})
+config({path: ".env.local"});
+
+// Add a check at the start of your server initialization
+if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET is not defined in environment variables");
+    process.exit(1);
+}
 
 // logic for SIGN UP
 export const signUp = async (req: Request,res:Response) => {
@@ -85,10 +91,9 @@ export const signUp = async (req: Request,res:Response) => {
 // logic for LOGIN 
 export const login = async (req: Request, res: Response) => {
     try{
-    // fetch the data    
     const {email,password} = req.body;
     console.log(email, password)
-    // validate details
+    
     if(!email || !password){
          res.status(400).json({
            success: false,
@@ -96,13 +101,13 @@ export const login = async (req: Request, res: Response) => {
         });
         return;
     }
-    // check if user exists or not
+    
     const user = await db.select().from(users).where(eq(users.email,email));
     if(!user.length){
         res.status(404).json({ message: "User not found" });
         return;
     }
-    // if user found then check the password 
+    
     const match = await bcrypt.compare(password,user[0].password);
     if(!match){
          res.status(401).json({
@@ -133,7 +138,6 @@ export const login = async (req: Request, res: Response) => {
     }
 } 
 
-// logic for Forgot Password Request (Using OTP)
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
       const { email } = req.body;
@@ -143,15 +147,13 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
           return;
       }
 
-      // Check if the user exists
       const userRecord = await db.select().from(users).where(eq(users.email, email));
       if (!userRecord.length) {
           res.status(404).json({ success: false, message: "User not found" });
           return;
       }
 
-      // Generate OTP for password reset
-      await generateOtp(req, res);  // Call the existing generateOtp function
+      await generateOtp(req, res);
       return;
 
   } catch (error) {
@@ -160,7 +162,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
       return;
   }
 };  
- // logic for resetting password
+
 export const resetPassword = async (req: Request, res: Response) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -185,10 +187,9 @@ export const resetPassword = async (req: Request, res: Response) => {
             message: data.message,
         }); return ;
     }
-      // Hash the new password
+
       const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      // Update the password in the database
       await db.update(users).set({ password: hashedPassword }).where(eq(users.email, email));
 
       res.status(200).json({ success: true, message: "Password has been reset successfully" });
@@ -203,56 +204,93 @@ export const resetPassword = async (req: Request, res: Response) => {
 
 //  logic for refresh token
 
-export const refreshToken = async(req: Request, res: Response): Promise<void> =>{
-    try{
-   // fetch the token
-   const{token} = req.body;
-   //validate it
-   if(!token){
-     res.status(401).json({
-        success: false,
-        message: "Unauthorised",
-    });return
-    ;}
-    // verify the token
-    let decoded: any;
-    try{
-    decoded = jwt.verify(token,process.env.REFRESH_SECRET || "refresh_secret");
-    }catch(error){
-        res.status(403).json({
-            success: false,
-            message: "Invalid refresh token"
-        });
-        return ;
-     }
-      // Fetch user from the database using the decoded ID
-      const user = await db.select().from(users).where(eq(users.id, decoded.id));
-      console.log("Received Refresh Token:", token);
-      console.log("User from DB:", user);
-      // Check if user exists
-      if (!user.length) {
-         res.status(404).json({
-              success: false,
-              message: "User not found",
-          });
-           return;
-      };
-       // Check if the stored refresh token matches
-       if (user[0].refreshToken !== token) {
-        res.status(403).json({
-            success: false,
-            message: "Refresh token does not match",
+export const refreshToken = async(req: Request, res: Response): Promise<void> => {
+    try {
+        // fetch the token
+        const { token } = req.body;
+        
+        // validate token presence
+        if (!token) {
+            res.status(401).json({
+                success: false,
+                message: "Refresh token is required"
+            });
+            return;
+        }
+
+        // verify the refresh token
+        let decoded: any;
+        try {
+            decoded = jwt.verify(token, process.env.REFRESH_SECRET || "refresh_secret");
+        } catch (error) {
+            if (error instanceof jwt.TokenExpiredError) {
+                res.status(401).json({
+                    success: false,
+                    message: "Refresh token has expired"
+                });
+                return;
+            }
+            
+            res.status(403).json({
+                success: false,
+                message: "Invalid refresh token"
+            });
+            return;
+        }
+
+        // Fetch user from the database using the decoded ID
+        const user = await db.select().from(users).where(eq(users.id, decoded.id));
+
+        // Check if user exists
+        if (!user.length) {
+            res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+            return;
+        }
+
+        // Check if the stored refresh token matches
+        if (user[0].refreshToken !== token) {
+            // Clear the invalid refresh token from database
+            await db.update(users)
+                .set({ refreshToken: null })
+                .where(eq(users.id, user[0].id));
+
+            res.status(403).json({
+                success: false,
+                message: "Refresh token has been revoked"
+            });
+            return;
+        }
+
+        // Generate new tokens
+        const newAccessToken = generateAccessToken(decoded.id, user[0].email);
+        const newRefreshToken = generateRefreshToken(decoded.id);
+
+        // Update refresh token in database
+        await db.update(users)
+            .set({ refreshToken: newRefreshToken })
+            .where(eq(users.id, user[0].id));
+
+        // Send new tokens
+        res.status(200).json({
+            success: true,
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+            message: "Tokens refreshed successfully"
         });
         return;
-    };
-     //generate a new access token
-     const newAccessToken = generateAccessToken(decoded.id, user[0].email)
-   res.status(200).json({ success: true, accessToken: newAccessToken });return;
+
     } catch (error) {
-      res.status(500).json({ success: false, message: "Internal Server Error" });
-      return;
+        console.error("Refresh token error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+        return;
     }
-  };
+};
 
   // logic for  logout
   export const logout = async (req: Request, res: Response): Promise<void>  => {
@@ -292,31 +330,124 @@ export const authenticateUser = async (req: AuthenticatedRequest, res: Response,
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return res.status(401).json({
                 success: false,
-                message: "Authentication failed: No token provided",
+                message: "No token provided",
+                code: "TOKEN_MISSING"
             });
         }
 
         const token = authHeader.split(" ")[1];
-        //console.log(token);
+        
         if (!process.env.JWT_SECRET) {
             throw new Error("JWT_SECRET is not defined");
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        //console.log(decoded);
-        if(!decoded || typeof decoded === 'string'){
-            return res.status(401).json({
-                success: false,
-                message: "Authentication failed: Invalid token",
-            });
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            if (!decoded || typeof decoded === 'string') {
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid token",
+                    code: "TOKEN_INVALID"
+                });
+            }
+
+            const [user] = await db
+                .select()
+                .from(usersTable)
+                .where(eq(usersTable.id, decoded.id))
+                .limit(1);
+            
+            
+
+            if (!user) {
+                return res.status(401).json({
+                    success: false,
+                    message: "User no longer exists",
+                    code: "USER_NOT_FOUND"
+                });
+            }
+
+            // if (!user.isActive) {
+            //     return res.status(401).json({
+            //         success: false,
+            //         message: "User account is disabled",
+            //         code: "ACCOUNT_DISABLED"
+            //     });
+            // }
+
+            req.user = {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                isAdmin: user.isAdmin
+            };
+            
+            next();
+        } catch (error) {
+            if (error instanceof jwt.TokenExpiredError) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Token has expired",
+                    code: "TOKEN_EXPIRED"
+                });
+            }
+            throw error;
         }
-        req.user = decoded?.user;
-        
-        next();
     } catch (error) {
         return res.status(401).json({
             success: false,
-            message: "Authentication failed: Invalid token",
+            message: "Authentication failed",
+            code: "AUTH_FAILED",
+            error: error
+        });
+    }
+};
+
+export const validateSession = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid session",
+                code: "INVALID_SESSION"
+            });
+        }
+
+        const [user] = await db
+            .select({
+                id: usersTable.id,
+                email: usersTable.email,
+                role: usersTable.role,
+                isAdmin: usersTable.isAdmin
+            })
+            .from(usersTable)
+            .where(eq(usersTable.id, userId))
+            .limit(1);
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "User not found",
+                code: "USER_INVALID"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            user: {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                isAdmin: user.isAdmin
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Session validation failed",
+            code: "VALIDATION_ERROR"
         });
     }
 };

@@ -170,3 +170,30 @@ export const refundPayment = async (req: AuthenticatedRequest, res: Response) =>
     }
 };
 
+//  controller for getting payment status
+// export const getPaymentStatus = async (req: Request, res: Response) => {
+//     try {
+//         const { paymentId } = req.params;
+        
+//         if (!paymentId) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Payment ID is required"
+//             });
+//         }
+
+//         const payment = await razorpay.payments.fetch(paymentId);
+        
+//         return res.status(200).json({
+//             success: true,
+//             data: payment
+//         });
+//     } catch (error) {
+//         console.error('Payment status error:', error);
+//         return res.status(500).json({
+//             success: false,
+//             message: 'Error fetching payment status'
+//         });
+//     }
+// };
+

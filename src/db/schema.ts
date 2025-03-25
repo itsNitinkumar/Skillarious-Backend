@@ -1,19 +1,8 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  boolean,
-  decimal,
-  bigint,
-  timestamp,
-  real,
-  integer,
-  primaryKey,
-} from 'drizzle-orm/pg-core';
+import { pgTable, uuid, bigint, text, timestamp, unique, boolean, foreignKey, numeric, real, integer, decimal, json, primaryKey, PgTable } from "drizzle-orm/pg-core"
 import { sql } from 'drizzle-orm';
 
 // USERS TABLE
-export const usersTable = pgTable('users', {
+export const usersTable= pgTable('users', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
@@ -27,6 +16,11 @@ export const usersTable = pgTable('users', {
   refreshToken: text("refresh_token"),
   isAdmin: boolean('is_admin').default(false).notNull(),
   role: text('role').default('user').notNull(), // 'user', 'educator', 'admin'
+  isBanned: boolean('is_banned').default(false).notNull(),
+  banReason: text('ban_reason'),
+  bannedAt: timestamp('banned_at'),
+  // bannedBy: uuid('banned_by').references(() => usersTable.id),
+  lastLogin: timestamp('last_login'),
 });
 
 // OTPS TABLE
@@ -59,6 +53,11 @@ export const coursesTable = pgTable('courses', {
   educatorId: uuid('educator_id').notNull().references(() => educatorsTable.id),
   price: decimal('price', { precision: 10, scale: 2 }).notNull(),
   thumbnail: text('thumbnail').notNull(),
+  isDismissed: boolean('is_dismissed').default(false).notNull(),
+  dismissReason: text('dismiss_reason'),
+  dismissedAt: timestamp('dismissed_at'),
+  completionRate: real('completion_rate'),
+  viewCount: integer('view_count').default(0),
 });
 
 // CATEGORY TABLE
@@ -88,6 +87,9 @@ export const modulesTable = pgTable('modules', {
   duration: real('duration'), // Using real() for float
   videoCount: bigint('video_count', { mode: 'number' }),
   materialCount: bigint('material_count', { mode: 'number' }),
+  isDismissed: boolean('is_dismissed').default(false).notNull(),
+  dismissReason: text('dismiss_reason'),
+  dismissedAt: timestamp('dismissed_at'),
 });
 
 // CLASSES TABLE
@@ -171,10 +173,12 @@ export const contentTable = pgTable('content', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   isPreview: boolean('is_preview').default(false),
+  isDismissed: boolean('is_dismissed').default(false).notNull(),
+  dismissReason: text('dismiss_reason'),
+  dismissedAt: timestamp('dismissed_at'),
+  viewCount: integer('view_count').default(0),
+  timeSpent: integer('time_spent').default(0), // in seconds
 });
-
-
-
 // Type definitions
 export type Content = typeof contentTable.$inferSelect;
 export type InsertContent = typeof contentTable.$inferInsert;
@@ -215,3 +219,15 @@ export type SelectMessage = typeof messagesTable.$inferSelect;
 
 export type InsertOtp = typeof otpsTable.$inferInsert;
 export type SelectOtp = typeof otpsTable.$inferSelect;
+// Admin log table
+export const adminLogsTable = pgTable('admin_logs', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  adminId: uuid('admin_id').notNull().references(() => usersTable.id),
+  action: text('action').notNull(),
+  targetId: uuid('target_id').notNull(),
+  metadata: json('metadata'),
+  createdAt: timestamp('created_at').notNull().defaultNow()
+});
+
+export type InsertAdminLog = typeof adminLogsTable.$inferInsert;
+export type SelectAdminLog = typeof adminLogsTable.$inferSelect;

@@ -9,27 +9,33 @@ import reviewRoute from "./src/routes/review.ts";
 import educatorRoute from "./src/routes/educator.ts";
 import contentRoute from "./src/routes/content.ts";
 import fileUpload from 'express-fileupload';
+
 const app = express();
 dotenv.config();
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(fileUpload({
   useTempFiles: true,
   tempFileDir: '/tmp/'
 }));
-app.use(cors());
 
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/otp", otpRoute);
 app.use("/api/v1/courses", courseRoute);
-app.use("/api/v1/payments", paymentRoute);
+// app.use("/api/v1/payments", paymentRoute);
 app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/educators", educatorRoute);
 app.use("/api/v1/content", contentRoute);
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT,() => {
-    console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
 
