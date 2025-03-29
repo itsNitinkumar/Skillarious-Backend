@@ -15,7 +15,7 @@ export const createCourse = async (req: AuthenticatedRequest, res: Response): Pr
  try{
     const {name,description,about,price} = req.body;
     const {id} = req.user;
-    if(!name || !description  || !price || about === undefined){
+    if(!name || !description  || !price || !about ){
         return res.status(400).json({
             success: false,
             message: 'Required fields are missing'

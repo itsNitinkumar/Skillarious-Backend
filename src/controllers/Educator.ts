@@ -70,18 +70,36 @@ export const registerAsEducator = async (req: AuthenticatedRequest, res: Respons
 };
 
 // Get educator profile
-export const getEducatorProfile = async (req: Request, res: Response) => {
+export const getEducatorProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const userId = req.user.id;
 
+    const user = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    if (!user.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    console.log(user)
+    if (!user[0].isEducator) {
+      return res.status(403).json({
+        success: false,
+        message: 'User is not registered as an educator'
+      });
+    }
+    
     const educator = await db.select()
       .from(educatorsTable)
-      .where(eq(educatorsTable.id, id));
+      .where(eq(educatorsTable.userId, userId));
 
     if (!educator.length) {
       return res.status(404).json({
         success: false,
-        message: 'Educator not found'
+        message: 'Educator profile not found'
       });
     }
 
@@ -90,6 +108,7 @@ export const getEducatorProfile = async (req: Request, res: Response) => {
       data: educator[0]
     });
   } catch (error) {
+    console.error('Error in getEducatorProfile:', error);
     return res.status(500).json({
       success: false,
       message: 'Error fetching educator profile'

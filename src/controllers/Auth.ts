@@ -420,7 +420,8 @@ export const validateSession = async (req: AuthenticatedRequest, res: Response) 
                 id: usersTable.id,
                 email: usersTable.email,
                 role: usersTable.role,
-                isAdmin: usersTable.isAdmin
+                isAdmin: usersTable.isAdmin,
+                isEducator: usersTable.isEducator
             })
             .from(usersTable)
             .where(eq(usersTable.id, userId))
@@ -440,7 +441,8 @@ export const validateSession = async (req: AuthenticatedRequest, res: Response) 
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                isAdmin: user.isAdmin
+                isAdmin: user.isAdmin,
+                isEducator: user.isEducator
             }
         });
     } catch (error) {
