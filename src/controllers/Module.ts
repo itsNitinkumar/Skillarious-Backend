@@ -14,13 +14,15 @@ export const createModule = async (req: AuthenticatedRequest, res: Response): Pr
   try {
     const { id } = req.user;
     const { courseId, name, duration, videoCount, materialCount } = req.body;
-   if(!id){
-    res.status(401).json({
-      success: false,
-      message: 'User not authenticated'
-    });
-    return;
-  }
+
+    if(!id){
+      res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+      return;
+    }
+
     // Validate required fields
     if (!courseId || !name) {
       res.status(400).json({
@@ -29,12 +31,48 @@ export const createModule = async (req: AuthenticatedRequest, res: Response): Pr
       });
       return;
     }
-     const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
-    // Check if user is authenticated and an educator
+
+    // Check if course exists
+    const courseExists = await db
+      .select()
+      .from(coursesTable)
+      .where(eq(coursesTable.id, courseId));
+
+    if (!courseExists.length) {
+      res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+      return;
+    }
+
+    const isEducator = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, id))
+      .then((data) => data[0].isEducator);
+
     if (!isEducator) {
       res.status(403).json({
         success: false,
         message: 'Only authenticated educators can create modules'
+      });
+      return;
+    }
+
+    // Verify the course belongs to this educator
+    const courseOwnership = await db
+      .select()
+      .from(coursesTable)
+      .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+      .where(and(
+        eq(coursesTable.id, courseId),
+        eq(educatorsTable.userId, id)
+      ));
+
+    if (!courseOwnership.length) {
+      res.status(403).json({
+        success: false,
+        message: 'You do not have permission to add modules to this course'
       });
       return;
     }
@@ -69,6 +107,7 @@ export const updateModule = async (req: AuthenticatedRequest, res: Response): Pr
     const { id } = req.user;
     const { moduleId } = req.params;
     const { name, duration, videoCount, materialCount } = req.body;
+
     if(!id){
       res.status(401).json({
         success: false,
@@ -77,9 +116,25 @@ export const updateModule = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
+    // Check if module exists first
+    const moduleExists = await db
+      .select()
+      .from(modulesTable)
+      .where(eq(modulesTable.id, moduleId));
 
-    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
-    // Check if user is authenticated and an educator
+    if (!moduleExists.length) {
+      res.status(404).json({
+        success: false,
+        message: 'Module not found'
+      });
+      return;
+    }
+
+    const isEducator = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, id))
+      .then((data) => data[0].isEducator);
+
     if (!isEducator) {
       res.status(403).json({
         success: false,
@@ -96,18 +151,18 @@ export const updateModule = async (req: AuthenticatedRequest, res: Response): Pr
       .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
       .where(and(
         eq(modulesTable.id, moduleId),
-        eq(educatorsTable.userId, req.user.id)
+        eq(educatorsTable.userId, id)
       ));
 
     if (!moduleWithCourse.length) {
-      res.status(404).json({
+      res.status(403).json({
         success: false,
         message: 'Module not found or you do not have permission to update it'
       });
       return;
     }
 
-    // Create update object with only defined values(selected values)
+    // Create update object with only defined values
     const updateData: Record<string, any> = {};
     if (name !== undefined) updateData.name = name;
     if (duration !== undefined) updateData.duration = duration;
@@ -197,59 +252,37 @@ export const getAllModules = async (req: Request, res: Response): Promise<void> 
   try {
     const { courseId } = req.params;
 
-    if (!courseId) {
-      res.status(400).json({
-        success: false,
-        message: 'Course ID is required'
-      });
-      return;
-    }
+    // First verify this is a valid course ID
+    const courseExists = await db
+      .select()
+      .from(coursesTable)
+      .where(eq(coursesTable.id, courseId));
 
-    // Get all modules for the specific course
-    const modules = await db
-      .select({
-        module: {
-          id: modulesTable.id,
-          name: modulesTable.name,
-          duration: modulesTable.duration,
-          videoCount: modulesTable.videoCount,
-          materialCount: modulesTable.materialCount,
-          courseId: modulesTable.courseId,
-        },
-        course: {
-          name: coursesTable.name,
-          educatorId: coursesTable.educatorId
-        }
-      })
-      .from(modulesTable)
-      .innerJoin(coursesTable, eq(modulesTable.courseId, coursesTable.id))
-      .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
-      .where(eq(modulesTable.courseId, courseId));
-
-      console.log(modules);
-
-    if (!modules.length) {
+    if (!courseExists.length) {
       res.status(404).json({
         success: false,
-        message: 'No modules found for this course'
+        message: 'Course not found'
       });
       return;
     }
+
+    const modules = await db
+      .select()
+      .from(modulesTable)
+      .where(eq(modulesTable.courseId, courseId))
+      .orderBy(modulesTable.name);
 
     res.status(200).json({
       success: true,
-      message: 'Modules fetched successfully',
       data: modules
     });
-
   } catch (error) {
     console.error('Error fetching modules:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching modules'
+      message: 'Failed to fetch modules'
     });
   }
 };
-
 
 

@@ -15,12 +15,16 @@ import {
 } from '../db/schema';
 import { and, avg, desc, eq, sql, SQL,count } from 'drizzle-orm';
 import { AdminActionInput } from '../schemas/admin';
+import crypto from 'crypto';
+import { sendEmail } from '../utils/email';
+import bcrypt from 'bcrypt';
 
 interface AuthenticatedRequest extends Request {
   user: {
     id: string;
     isAdmin: boolean;
     role: string;
+    isSuperAdmin: boolean;
   };
 }
 
@@ -570,9 +574,114 @@ export const getEducatorAnalytics = async (req: Request, res: Response) => {
   }
 };
 
+export const inviteAdmin = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const invitingAdmin = req.user;
+    const { email } = req.body;
 
+    // Check if inviting user is super admin
+    if (!invitingAdmin.isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only super admins can invite new admins'
+      });
+    }
 
+    // Generate invite token
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
 
+    // Create invite record
+    await db.insert(adminInvitesTable).values({
+      email,
+      inviteToken,
+      expiresAt,
+      createdBy: invitingAdmin.id
+    });
 
+    // Send invitation email
+    const inviteUrl = `${process.env.FRONTEND_URL}/admin/register?token=${inviteToken}`;
+    await sendEmail({
+      to: email,
+      subject: 'Admin Invitation',
+      text: `You've been invited to become an admin. Register here: ${inviteUrl}`
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin invitation sent successfully'
+    });
+  } catch (error) {
+    console.error('Error in inviteAdmin:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to send admin invitation'
+    });
+  }
+};
+
+export const registerAdmin = async (req: Request, res: Response) => {
+  try {
+    const { name, email, password, inviteToken } = req.body;
+
+    // Validate invite token
+    const invite = await db.select()
+      .from(adminInvitesTable)
+      .where(and(
+        eq(adminInvitesTable.inviteToken, inviteToken),
+        eq(adminInvitesTable.email, email),
+        eq(adminInvitesTable.used, false),
+        gt(adminInvitesTable.expiresAt, new Date())
+      ))
+      .limit(1);
+
+    if (!invite.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired invitation'
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create admin user
+    const [newAdmin] = await db.insert(usersTable)
+      .values({
+        name,
+        email,
+        password: hashedPassword,
+        isAdmin: true,
+        role: 'admin',
+        verified: true
+      })
+      .returning();
+
+    // Mark invite as used
+    await db.update(adminInvitesTable)
+      .set({ used: true })
+      .where(eq(adminInvitesTable.inviteToken, inviteToken));
+
+    // Log admin creation
+    await db.insert(adminLogsTable).values({
+      adminId: invite[0].createdBy,
+      action: 'CREATE_ADMIN',
+      targetId: newAdmin.id,
+      metadata: { email: newAdmin.email }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Admin registered successfully'
+    });
+  } catch (error) {
+    console.error('Error in registerAdmin:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to register admin'
+    });
+  }
+};
 
 

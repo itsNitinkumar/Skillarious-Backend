@@ -3,8 +3,8 @@ import { RequestHandler } from 'express';
 import { createDoubt, replyToDoubt, getRealtimeStatus } from '../controllers/Doubt.ts';
 import { createModule, updateModule, deleteModule, getAllModules } from '../controllers/Module.ts';
 import { uploadStudyMaterial,updateStudyMaterial, deleteStudyMaterial,getModuleStudyMaterials } from '../controllers/StudyMaterial.ts';
-import { createCategory, getCategoryBySearch } from '../controllers/Category.ts';
-import { createClass, getClassStream } from '../controllers/Class.ts';
+import { createCategory, updateCategory, deleteCategory,getAllCategories, getCategoryBySearch } from '../controllers/Category.ts';
+import { createClass, getClassStream, updateClass, deleteClass, getAllClassesOfCourse } from '../controllers/Class.ts';
 import { authenticateUser } from '../controllers/Auth.ts';
 
 const router = express.Router();
@@ -29,13 +29,25 @@ router.get('/getModuleStudyMaterials/:moduleId', getModuleStudyMaterials as unkn
 
 // Category related routes
 router.post('/createCategory', authenticateUser as unknown as RequestHandler, createCategory as unknown as RequestHandler);
+router.put('/updateCategory/:categoryId', authenticateUser as unknown as RequestHandler, updateCategory as unknown as RequestHandler);
+router.delete('/deleteCategory/:categoryId', authenticateUser as unknown as RequestHandler, deleteCategory as unknown as RequestHandler);
+router.get('/getAllCategories', getAllCategories as unknown as RequestHandler);
 router.get('/searchCategory', getCategoryBySearch as unknown as RequestHandler);
+
 
 // Class related routes
 router.post('/createClass', authenticateUser as unknown as RequestHandler, createClass as unknown as RequestHandler);
+router.get('/getAllClassesOfCourse/:courseId', authenticateUser as unknown as RequestHandler, getAllClassesOfCourse as unknown as RequestHandler);
 router.get('/getClassStream/:classId', getClassStream as unknown as RequestHandler);
+router.put('/updateClass/:classId', authenticateUser as unknown as RequestHandler, updateClass as unknown as RequestHandler);
+router.delete('/deleteClass/:classId', authenticateUser as unknown as RequestHandler, deleteClass as unknown as RequestHandler);
 
 export default router;
+
+
+
+
+
 
 
 

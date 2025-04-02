@@ -280,42 +280,85 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
   };
 //   controller for add categories
 
-export const addCategory = async (req: AuthenticatedRequest, res: Response): Promise<Response>  => {
-  try{
+export const addCategory = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  try {
     const {id} = req.user;
-    const {categoryId,courseId} = req.body;
+    const {categoryId, courseId} = req.body;
+    
     if(!categoryId || !courseId){
       return res.status(400).json({
         success: false,
         message: 'Required fields are missing'
       });
     }
-    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+
+    // Check if user is an educator
+    const isEducator = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, id))
+      .then((data) => data[0].isEducator);
+
     if(!isEducator){
       return res.status(403).json({
         success: false,
-        message: 'Only educators can add categories'
+        message: 'Only educators can add categories to courses'
       });
     }
+
+    // Verify the course belongs to this educator
+    const courseOwnership = await db
+      .select()
+      .from(coursesTable)
+      .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+      .where(and(
+        eq(coursesTable.id, courseId),
+        eq(educatorsTable.userId, id)
+      ));
+
+    if (!courseOwnership.length) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only add categories to your own courses'
+      });
+    }
+
+    // Verify category exists
+    const categoryExists = await db
+      .select()
+      .from(categoryTable)
+      .where(eq(categoryTable.id, categoryId));
+
+    if (!categoryExists.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Category not found'
+      });
+    }
+
+    // Add category to course
     const category = await db.insert(categoryCoursesTable).values({
       categoryId,
       courseId
     }).returning();
+
     return res.status(201).json({
       success: true,
-      message: 'Category added successfully',
+      message: 'Category added to course successfully',
       data: category[0]
     });
-    }catch(error){
-    console.error('Error adding category:', error);
+  } catch (error) {
+    if (error.code === '23505') { // Unique constraint violation
+      return res.status(400).json({
+        success: false,
+        message: 'This course is already associated with this category'
+      });
+    }
     return res.status(500).json({
       success: false,
-      message: 'Error adding category'
+      message: 'Error adding category to course'
     });
   }
-
-}
-// 6) controller for get courses by category
+}; // 6) controller for get courses by category
 
  export const getCoursesByCategory = async (req: Request, res: Response): Promise<Response> => {
   try {

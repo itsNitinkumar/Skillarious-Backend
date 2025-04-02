@@ -96,7 +96,7 @@ export const modulesTable = pgTable('modules', {
 export const classesTable = pgTable('classes', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   moduleId: uuid('module_id').notNull().references(() => modulesTable.id),
-  views: bigint('views', { mode: 'number' }),
+  views: bigint('views', { mode: 'number' }).default(0), // Changed to mode: 'number'
   duration: timestamp('duration'),
   fileId: text('file_id'),
 });
@@ -113,7 +113,7 @@ export const reviewsTable = pgTable('reviews', {
 });
 
 // TRANSACTIONS TABLE
-export const transactionsTable = pgTable('transactions', {
+export const transactionsTable = pgTable('transactions', {  // Ensure it's 'transactions' (plural)
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   userId: uuid('user_id').notNull().references(() => usersTable.id),
   amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
@@ -122,7 +122,7 @@ export const transactionsTable = pgTable('transactions', {
   status: text('status').notNull().default('completed'),
   paymentId: text('payment_id').notNull(),
   refundReason: text('refund_reason'),
-  refundDate: timestamp('refund_date'),
+  refundDate: timestamp('refund_date')
 });
 
 // FILES TABLE
@@ -231,3 +231,13 @@ export const adminLogsTable = pgTable('admin_logs', {
 
 export type InsertAdminLog = typeof adminLogsTable.$inferInsert;
 export type SelectAdminLog = typeof adminLogsTable.$inferSelect;
+
+export const adminInvitesTable = pgTable('admin_invites', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  email: text('email').notNull(),
+  inviteToken: text('invite_token').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  used: boolean('used').default(false).notNull(),
+  createdBy: uuid('created_by').references(() => usersTable.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});

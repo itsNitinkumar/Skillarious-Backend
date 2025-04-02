@@ -9,7 +9,7 @@ import {generateAccessToken, generateRefreshToken} from "../utils/generateToken.
 import { generateOtp, verifyOtp } from "./Otp.ts";
 
 interface AuthenticatedRequest extends Request {
-  user?: any; // You can replace 'any' with a more specific type for your user
+  user?: any;
 }
 
 config({path: ".env.local"});
@@ -74,8 +74,13 @@ export const signUp = async (req: Request,res:Response) => {
    //  response
     res.status(200).json({
       success: true,
-      message: "User registered successfully",
-      user: newUser[0],
+      message: "User registered successfully. Please check your email for verification code.",
+      user: {
+        name: newUser[0].name,
+        email: newUser[0].email,
+        verified: false
+      },
+      requiresVerification: true
     });
     return;
    }catch(error){

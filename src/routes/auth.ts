@@ -14,6 +14,7 @@ router.post("/login", login);
 router.post("/signup", signUp);
 router.post("/refreshtoken", refreshToken);
 router.post("/logout", logout);
+router.post("/forgotpassword", authenticateUser as express.RequestHandler);
 router.get("/validate", authenticateUser as express.RequestHandler, validateSession as unknown as express.RequestHandler);
 
 export default router;

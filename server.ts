@@ -34,7 +34,7 @@ app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/educators", educatorRoute);
 app.use("/api/v1/content", contentRoute);
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 4001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

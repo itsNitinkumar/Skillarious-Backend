@@ -13,20 +13,18 @@ export const createCategory = async (req: AuthenticatedRequest, res: Response) =
   try { 
     const { id } = req.user;
     if(!id){
-      res.status(401).json({
+      return res.status(401).json({
         success: false,
         message: 'User not authenticated'
       });
-      return;
     }
-    // Check if user is authenticated and an educator
-    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
-    if (!isEducator) {
-      res.status(403).json({
+    // Check if user is authenticated and an admin
+    const user = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0]);
+    if (!user.isAdmin) {
+      return res.status(403).json({
         success: false,
-        message: 'Only authenticated educators can create categories'
+        message: 'Only administrators can manage categories'
       });
-      return;
     }
     const { name, description } = req.body;
 
@@ -46,6 +44,99 @@ export const createCategory = async (req: AuthenticatedRequest, res: Response) =
     });
   }
 };
+// controller for update category
+export const updateCategory = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.user;
+    if(!id){
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    const { categoryId } = req.params;
+    const { name, description } = req.body;
+    
+    const user = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0]);
+    if (!user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only administrators can manage categories'
+      });
+    }
+
+    const updatedCategory = await db
+      .update(categoryTable)
+      .set({
+        name,
+        description
+      })
+      .where(eq(categoryTable.id, categoryId))
+      .returning();
+
+    return res.status(200).json({
+      success: true,
+      data: updatedCategory[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating category'
+    });
+  }
+};
+// controller for delete category
+
+export const deleteCategory = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.user;
+    if(!id){
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    const { categoryId } = req.params;
+    
+    const user = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0]);
+    if (!user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only administrators can manage categories'
+      });
+    }
+
+    await db.delete(categoryTable).where(eq(categoryTable.id, categoryId));
+    return res.status(200).json({
+      success: true,
+      message: 'Category deleted successfully'
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error deleting category'
+    });
+  }
+};
+
+//controlller for getAlll categories
+export const getAllCategories = async (req: Request, res: Response) => {
+  try {
+    
+    const categories = await db.select().from(categoryTable);
+    return res.status(200).json({
+      success: true,
+      message: 'Categories fetched successfully',
+      data: categories
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching categories'
+    });
+  }
+};  
+
 // controller for searching categories
 export const getCategoryBySearch = async (req: Request, res: Response) => {
   try {
@@ -82,7 +173,5 @@ export const getCategoryBySearch = async (req: Request, res: Response) => {
     });
   }
 };
-
-
 
 

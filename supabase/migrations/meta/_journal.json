@@ -71,6 +71,13 @@
       "when": 1742795155441,
       "tag": "0009_tiny_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1743606418718,
+      "tag": "0010_lively_abomination",
+      "breakpoints": true
     }
   ]
 }

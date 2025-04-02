@@ -1,13 +1,62 @@
 import { Request, Response } from 'express';
 import { db } from '../db/index.ts';
 import { reviewsTable, coursesTable, transactionsTable } from '../db/schema.ts';
-import { eq, avg, desc, and } from 'drizzle-orm';
+import { eq, avg, desc, and, sql } from 'drizzle-orm';
 
 interface AuthenticatedRequest extends Request {
     user?: {
         id: string;
     };
 }
+
+// Add this helper function
+const verifyPurchase = async (userId: string, courseId: string) => {
+    try {
+        // First get the transaction and log its exact status
+        const transactions = await db
+            .select({
+                id: transactionsTable.id,
+                userId: transactionsTable.userId,
+                courseId: transactionsTable.courseId,
+                status: transactionsTable.status
+            })
+            .from(transactionsTable)
+            .where(
+                and(
+                    eq(transactionsTable.userId, userId),
+                    eq(transactionsTable.courseId, courseId)
+                )
+            );
+
+       
+        if (transactions.length > 0) {
+            console.log('Status exact value:', {
+                status: transactions[0].status,
+                statusLength: transactions[0].status.length,
+                statusCharCodes: [...transactions[0].status].map(char => char.charCodeAt(0))
+            });
+        }
+
+        // Try with LIKE operator
+        const completedTransactions = await db
+            .select()
+            .from(transactionsTable)
+            .where(
+                and(
+                    eq(transactionsTable.userId, userId),
+                    eq(transactionsTable.courseId, courseId),
+                    sql`${transactionsTable.status} LIKE 'completed%'` // Match 'completed' followed by anything
+                )
+            );
+
+        
+
+        return completedTransactions.length > 0;
+    } catch (error) {
+        console.error('Error verifying purchase:', error);
+        return false;
+    }
+};
 
 // Create a new review
 export const createReview = async (req: AuthenticatedRequest, res: Response) => {
@@ -18,30 +67,12 @@ export const createReview = async (req: AuthenticatedRequest, res: Response) => 
         if (!userId || !rating || !courseId) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields'
+                message: 'Missing required fields',
+                details: { userId, rating, courseId }
             });
         }
 
-        // Check if user has purchased the course
-        const transaction = await db
-            .select()
-            .from(transactionsTable)
-            .where(
-                and(
-                    eq(transactionsTable.courseId, courseId),
-                    eq(transactionsTable.userId, userId),
-                    eq(transactionsTable.status, 'completed')
-                )
-            );
-            //console.log(transaction);
-
-        if (!transaction.length) {
-            return res.status(403).json({
-                success: false,
-                message: 'You must purchase the course before reviewing'
-            });
-        }
-        // check if a review already exist or not
+        // check if a review already exists
         const existingReview = await db
             .select()
             .from(reviewsTable)
@@ -52,11 +83,28 @@ export const createReview = async (req: AuthenticatedRequest, res: Response) => 
                 )
             );
 
-        if (existingReview.length) {
+        
+
+        if (existingReview.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: 'You have already reviewed this course.' 
-            })
+                message: 'You have already reviewed this course',
+                existingReview: existingReview[0]
+            });
+        }
+
+        const hasPurchased = await verifyPurchase(userId, courseId);
+        
+        if (!hasPurchased) {
+            return res.status(403).json({
+                success: false,
+                message: 'You must purchase the course before reviewing',
+                details: {
+                    userId,
+                    courseId,
+                    verified: false
+                }
+            });
         }
 
         // Create new review
@@ -77,7 +125,7 @@ export const createReview = async (req: AuthenticatedRequest, res: Response) => 
             review: review[0]
         });
     } catch (error) {
-          console.error('Review creation error:', error);
+        console.error('Review creation error:', error);
         return res.status(500).json({
             success: false,
             message: 'Error creating review'
@@ -90,30 +138,30 @@ export const updateReview = async (req: AuthenticatedRequest, res: Response) => 
     try {
         const userId = req.user?.id;
         const { courseId } = req.params;
-        const { rating, message } = req.body; 
+        const { rating, message } = req.body;
 
-        if (!userId || !rating || !courseId) { 
-            return res.status(400).json({
+        // First check if review exists and belongs to the user
+        if (!userId) {
+            return res.status(401).json({
                 success: false,
-                message: 'Missing required fields'
+                message: 'Unauthorized - User ID is required'
             });
         }
 
-        // First check if review exists
         const existingReview = await db
             .select()
             .from(reviewsTable)
             .where(
                 and(
-                    eq(reviewsTable.userId, userId),
+                    eq(reviewsTable.userId, userId as string),
                     eq(reviewsTable.courseId, courseId)
                 )
             );
 
         if (!existingReview.length) {
-            return res.status(404).json({
+            return res.status(403).json({
                 success: false,
-                message: 'You haven\'t reviewed this course yet.'
+                message: 'You are not authorized to update this review'
             });
         }
 
@@ -202,15 +250,14 @@ export const deleteReview = async (req: AuthenticatedRequest, res: Response) => 
     try {
         const userId = req.user?.id;
         const { courseId } = req.params;
-
-        if (!userId || !courseId) {
-            return res.status(400).json({
+        if (!userId) {
+            return res.status(401).json({
                 success: false,
-                message: 'Missing required fields'
+                message: 'Unauthorized - User ID is required'
             });
         }
 
-        // Check if review exists
+        // Check if review exists and belongs to the user
         const existingReview = await db
             .select()
             .from(reviewsTable)
@@ -222,9 +269,9 @@ export const deleteReview = async (req: AuthenticatedRequest, res: Response) => 
             );
 
         if (!existingReview.length) {
-            return res.status(404).json({
+            return res.status(403).json({
                 success: false,
-                message: 'Review not found'
+                message: 'You are not authorized to delete this review'
             });
         }
 
@@ -250,5 +297,12 @@ export const deleteReview = async (req: AuthenticatedRequest, res: Response) => 
         });
     }
 };
+
+
+
+
+
+
+
 
 

@@ -9,9 +9,11 @@ import {
   getRevenueAnalytics,
   getPlatformOverview,
   getReviewAnalytics,
-  getEducatorAnalytics
+  getEducatorAnalytics,
+  inviteAdmin,
+  registerAdmin
 } from '../controllers/Admin';
-import { isAdmin } from '../middleware/adminAuth';
+import { isAdmin, isSuperAdmin } from '../middleware/adminAuth';
 import { validateSchema } from '../middleware/validateSchema';
 import { adminActionSchema } from '../schemas/admin';
 import { logAdminAction } from '../middleware/adminLogger';
@@ -96,7 +98,18 @@ router.get(
   getEducatorAnalytics as unknown as express.RequestHandler
 );
 
+// Admin Management Routes
+router.post(
+  '/invite',
+  isAdmin as express.RequestHandler,
+  isSuperAdmin as express.RequestHandler,
+  inviteAdmin as express.RequestHandler
+);
+
+router.post('/register', registerAdmin as express.RequestHandler);
+
 export default router;
+
 
 
 
