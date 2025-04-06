@@ -173,34 +173,43 @@ export const updateCourse = async(req: AuthenticatedRequest, res:Response):Promi
 
 export const getAllCourses = async (req: Request, res: Response): Promise<Response> => {
     try {
-      // Fetch all courses with educator details
       const courses = await db
         .select({
           id: coursesTable.id,
           name: coursesTable.name,
           description: coursesTable.description,
           about: coursesTable.about,
-          rating: coursesTable.thumbnail,
           price: coursesTable.price,
+          thumbnail: coursesTable.thumbnail,
+          viewCount: coursesTable.viewCount,
+          start: coursesTable.start,
           educatorId: coursesTable.educatorId,
-          educatorName: educatorsTable.id, // Fetching educator id for now (Can join to get name if needed)
+          educatorName: usersTable.name,  
+          educatorPfp: usersTable.pfp,      
         })
         .from(coursesTable)
-        .leftJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id));
+        .innerJoin(
+          educatorsTable, 
+          eq(coursesTable.educatorId, educatorsTable.id)
+        )
+        .innerJoin(
+          usersTable, 
+          eq(educatorsTable.userId, usersTable.id)
+        );
   
       return res.status(200).json({
         success: true,
         message: 'Courses fetched successfully',
         courses,
       });
-  
     } catch (error) {
       console.error('Error fetching courses:', error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: 'Error fetching courses' });
+        message: 'Error fetching courses'
+      });
     }
-  };
+};
 
   // controller for getting a single course
   export const getSingleCourse = async (req: Request, res: Response): Promise<Response> => {
@@ -347,7 +356,7 @@ export const addCategory = async (req: AuthenticatedRequest, res: Response): Pro
       data: category[0]
     });
   } catch (error) {
-    if (error.code === '23505') { // Unique constraint violation
+    if (error?.statusCode === '23505') { // Unique constraint violation
       return res.status(400).json({
         success: false,
         message: 'This course is already associated with this category'

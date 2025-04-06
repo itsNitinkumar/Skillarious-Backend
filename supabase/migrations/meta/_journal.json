@@ -78,6 +78,20 @@
       "when": 1743606418718,
       "tag": "0010_lively_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1743702228057,
+      "tag": "0011_neat_starhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1743703503158,
+      "tag": "0012_panoramic_celestials",
+      "breakpoints": true
     }
   ]
 }
