@@ -64,8 +64,27 @@ export const coursesTable = pgTable('courses', {
 export const categoryTable = pgTable('category', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull().unique(),
-  description: text('description'),
+  description: text('description').default('No description provided'),  // Added default value
 });
+
+// // Create a function to handle null/empty descriptions
+// export const handleEmptyDescription = sql`
+// CREATE OR REPLACE FUNCTION handle_empty_description()
+// RETURNS TRIGGER AS $$
+// BEGIN
+//   IF NEW.description IS NULL OR NEW.description = '' THEN
+//     NEW.description := 'No description provided';
+//   END IF;
+//   RETURN NEW;
+// END;
+// $$ LANGUAGE plpgsql;
+
+// -- Create the trigger
+// CREATE OR REPLACE TRIGGER category_description_trigger
+//   BEFORE INSERT OR UPDATE ON category
+//   FOR EACH ROW
+//   EXECUTE FUNCTION handle_empty_description();
+// `;
 
 // CATEGORY_COURSES TABLE
 export const categoryCoursesTable = pgTable(

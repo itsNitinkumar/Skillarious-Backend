@@ -9,6 +9,7 @@ import reviewRoute from "./src/routes/review.ts";
 import educatorRoute from "./src/routes/educator.ts";
 import contentRoute from "./src/routes/content.ts";
 import fileUpload from 'express-fileupload';
+import userRoutes from "./src/routes/user.ts";
 
 const app = express();
 dotenv.config();
@@ -25,7 +26,7 @@ app.use(fileUpload({
   useTempFiles: true,
   tempFileDir: '/tmp/'
 }));
-
+app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/otp", otpRoute);
 app.use("/api/v1/courses", courseRoute);

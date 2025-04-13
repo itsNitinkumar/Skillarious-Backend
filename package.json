@@ -5,13 +5,17 @@
   "main": "server.ts",
   "scripts": {
     "start": "node server.ts",
-    "dev": "nodemon --exec tsx server.ts"
+    "dev": "nodemon --exec tsx server.ts",
+    "migrate": "drizzle-kit push",
+    "seed": "tsx scripts/seed.ts",
+    "seed:fresh": "npm run migrate && npm run seed"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@faker-js/faker": "^8.4.1",
     "@supabase/supabase-js": "^2.48.1",
     "@types/express-fileupload": "^1.5.1",
     "axios": "^1.7.9",
@@ -27,6 +31,7 @@
     "postgres": "^3.4.5",
     "prettier": "^3.4.2",
     "razorpay": "^2.9.6",
+    "uuid": "^9.0.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -42,3 +47,9 @@
     "typescript": "^5.7.3"
   }
 }
+
+
+
+
+
+

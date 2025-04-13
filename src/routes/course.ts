@@ -10,11 +10,14 @@ import {
     searchCourses,
     addCategory,
     getCoursesByCategory,
-    getCoursesByEducator
+    getCoursesByEducator,
+    checkCourseOwnership,
+    checkCourseAccess,
+    purchaseCourse
 } from '../controllers/Course.ts';
 
 // Protected routes (require authentication)
-router.post("/create", authenticateUser as unknown as express.RequestHandler, createCourse as unknown as express.RequestHandler);
+router.post("/create/:educatorId", authenticateUser as unknown as express.RequestHandler, createCourse as unknown as express.RequestHandler);
 router.put("/update/:CourseId", authenticateUser as unknown as express.RequestHandler, updateCourse as unknown as express.RequestHandler);
 router.delete("/delete/:CourseId", authenticateUser as unknown as express.RequestHandler, deleteCourse as unknown as express.RequestHandler);
 router.post('/addCategory', authenticateUser as unknown as express.RequestHandler, addCategory as unknown as express.RequestHandler);
@@ -25,5 +28,10 @@ router.get("/single/:id", getSingleCourse as unknown as express.RequestHandler);
 router.get('/search', searchCourses as unknown as express.RequestHandler);
  router.get('/searchByCategory', getCoursesByCategory as unknown as express.RequestHandler);
 router.get('/educator/:id', getCoursesByEducator as unknown as express.RequestHandler);
+
+// Add these new routes
+router.get("/ownership/:courseId",  authenticateUser as unknown as express.RequestHandler, checkCourseOwnership as unknown as express.RequestHandler);
+router.get("/access/:courseId",  authenticateUser as unknown as express.RequestHandler, checkCourseAccess as unknown as express.RequestHandler);
+router.post("/purchase/:courseId",  authenticateUser as unknown as express.RequestHandler, purchaseCourse as unknown as express.RequestHandler);
 
 export default router;

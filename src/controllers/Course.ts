@@ -10,25 +10,49 @@ interface AuthenticatedRequest extends Request {
     };
 }
 
+// Helper function to verify course ownership
+const verifyEducatorOwnership = async (userId: string, educatorId: string): Promise<boolean> => {
+  const educator = await db
+    .select()
+    .from(educatorsTable)
+    .where(and(
+      eq(educatorsTable.userId, userId),
+      eq(educatorsTable.id, educatorId)
+    ))
+    .limit(1);
+
+  return educator.length > 0;
+};
+
 // 1) Controller to create a course
 export const createCourse = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
- try{
-    const {name,description,about,price} = req.body;
-    const {id} = req.user;
+  try {
+    const { name, description, about, price } = req.body;
+    const { id: userId } = req.user;
+    const { educatorId } = req.params; // Get from route params
+
+    // Verify ownership
+    const isOwner = await verifyEducatorOwnership(userId, educatorId);
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only create courses for your own educator profile'
+      });
+    }
+
     if(!name || !description  || !price || !about ){
         return res.status(400).json({
             success: false,
             message: 'Required fields are missing'
         });
     }
-  const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, userId)).then((data) => data[0].isEducator);
     if(!isEducator){
         return res.status(403).json({
             success: false,
             message: 'Only educators can create courses'
         });
     }
-    const educatorId = await db.select().from(educatorsTable).where(eq(educatorsTable.userId, id)).then((data) => data[0].id);
     // insert into database
     const newCourse = await db.insert(coursesTable).values({
         name,
@@ -53,7 +77,7 @@ export const createCourse = async (req: AuthenticatedRequest, res: Response): Pr
         message: "Course created successfully",
         courseId: newCourse[0].id,
     });
- }catch (error) {
+  } catch (error) {
     console.error('Error creating course:', error);
     return res.status(500).json({ 
         success: false,
@@ -63,109 +87,118 @@ export const createCourse = async (req: AuthenticatedRequest, res: Response): Pr
 
 // 2) controller for updating the course
 
-export const updateCourse = async(req: AuthenticatedRequest, res:Response):Promise<Response> => {
-    try {
-        const {CourseId} = req.params;
-        const {name, description, about, price} = req.body;
-        const {id} = req.user; // Get the user ID from the request
-        
-        const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
+export const updateCourse = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  try {
+    const { CourseId } = req.params;
+    const { id: userId } = req.user;
+
+    // First get the course to check ownership
+    const course = await db
+      .select()
+      .from(coursesTable)
+      .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+      .where(eq(coursesTable.id, CourseId))
+      .limit(1);
+
+    if (!course.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Verify ownership
+    const isOwner = await verifyEducatorOwnership(userId, course[0].courses.educatorId);
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only update your own courses'
+      });
+    }
+
+    const {name, description, about, price} = req.body;
+    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, userId)).then((data) => data[0].isEducator);
     if (!isEducator) {
         return res.status(403).json({ message: 'Only educators can update courses' });
     }
 
-    // Check if the course belongs to the educator
-    const courseWithEducator = await db
-        .select()
-        .from(coursesTable)
-        .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
-        .where(and(
-            eq(coursesTable.id, CourseId),
-            eq(educatorsTable.userId, id)
-        ));
-        
-
-    if (!courseWithEducator.length) {
-        return res.status(403).json({ message: 'You are not authorized to update this course' });
-    }
-
-        // Create an update object with only defined values
-        const updateData: Record<string, any> = {};
-        
-         updateData.name = name;
-        updateData.description = description;
-        updateData.about = about;
-         updateData.price = price.toString();
-
-        // Only perform update if there are fields to update
-        if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No valid fields to update'
-            });
-        }
-
-        // Update the course with only defined fields
-        const updatedCourse = await db.update(coursesTable)
-            .set(updateData)
-            .where(eq(coursesTable.id, id))
-            .returning();
-
-        return res.status(200).json({
-            success: true,  // Fixed typo in 'success'
-            message: 'Course updated successfully',
-            course: updatedCourse[0],
-        });
+    // Create an update object with only defined values
+    const updateData: Record<string, any> = {};
     
-    } catch (error) {
-        console.error('Error updating course:', error);
-        return res.status(500).json({
-            success: false, 
-            message: 'Error in updating course' 
-        });
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (about) updateData.about = about;
+    if (price) updateData.price = price.toString();
+
+    // Only perform update if there are fields to update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields to update'
+      });
     }
+
+    // Update the course with only defined fields
+    const updatedCourse = await db.update(coursesTable)
+      .set(updateData)
+      .where(eq(coursesTable.id, CourseId))
+      .returning();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Course updated successfully',
+      course: updatedCourse[0],
+    });
+  } catch (error) {
+    console.error('Error updating course:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error in updating course'
+    });
+  }
 };
   // 3)  controller for deleting the course
  export const deleteCourse = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
   try {
-    const { id } = req.user;
+    const { id: userId } = req.user;
     const { CourseId } = req.params; // Course ID from URL
-    
-    if (!CourseId) {
-      return res.status(400).json({ message: 'Course ID is required' });
-    }
-    const isEducator = await db.select().from(usersTable).where(eq(usersTable.id, id)).then((data) => data[0].isEducator);
-    if (!isEducator) {
-        return res.status(403).json({ message: 'Only educators can delete courses' });
+
+    // First get the course to check ownership
+    const course = await db
+      .select()
+      .from(coursesTable)
+      .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+      .where(eq(coursesTable.id, CourseId))
+      .limit(1);
+
+    if (!course.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
     }
 
-    // Check if the course belongs to the educator
-    const courseWithEducator = await db
-        .select()
-        .from(coursesTable)
-        .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
-        .where(and(
-            eq(coursesTable.id, CourseId),
-            eq(educatorsTable.userId, id)
-        ));
-        
-
-    if (!courseWithEducator.length) {
-        return res.status(403).json({ message: 'You are not authorized to delete this course' });
+    // Verify ownership
+    const isOwner = await verifyEducatorOwnership(userId, course[0].courses.educatorId);
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete your own courses'
+      });
     }
 
     // Delete course
     await db.delete(coursesTable).where(eq(coursesTable.id, CourseId));
 
     return res.status(200).json({ 
-        success:true,
-        message: 'Course deleted successfully' });
-
+      success: true,
+      message: 'Course deleted successfully' });
   } catch (error) {
     console.error('Error deleting course:', error);
     return res.status(500).json({
-        success: false,
-         message: 'Error deleting course' });
+      success: false,
+      message: 'Error deleting course'
+    });
   }
 };
 
@@ -237,8 +270,9 @@ export const getAllCourses = async (req: Request, res: Response): Promise<Respon
       }
   
       return res.status(200).json({
+        success: true,
         message: 'Course fetched successfully',
-        course: course[0],
+        data: course[0]  // Changed to match expected structure
       });
   
     } catch (error) {
@@ -356,7 +390,7 @@ export const addCategory = async (req: AuthenticatedRequest, res: Response): Pro
       data: category[0]
     });
   } catch (error) {
-    if (error?.statusCode === '23505') { // Unique constraint violation
+    if (error) { // Unique constraint violation
       return res.status(400).json({
         success: false,
         message: 'This course is already associated with this category'
@@ -445,4 +479,84 @@ const isUserEnrolled = async (userId: string, courseId: string) => {
     return transaction.length > 0;
 };
 
-  
+export const checkCourseOwnership = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  try {
+    const { id: userId } = req.user;
+    const { courseId } = req.params;
+
+    const course = await db
+      .select()
+      .from(coursesTable)
+      .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
+      .where(and(
+        eq(coursesTable.id, courseId),
+        eq(educatorsTable.userId, userId)
+      ))
+      .limit(1);
+
+    return res.status(200).json({
+      success: course.length > 0,
+      isOwner: course.length > 0
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking course ownership'
+    });
+  }
+};
+
+export const checkCourseAccess = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  try {
+    const { id: userId } = req.user;
+    const { courseId } = req.params;
+
+    // Check if user has purchased the course
+    const transaction = await db
+      .select()
+      .from(transactionsTable)
+      .where(and(
+        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.courseId, courseId),
+        eq(transactionsTable.status, 'completed')
+      ))
+      .limit(1);
+
+    return res.status(200).json({
+      success: transaction.length > 0,
+      hasAccess: transaction.length > 0
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking course access'
+    });
+  }
+};
+
+export const purchaseCourse = async (req: AuthenticatedRequest, res: Response): Promise<Response> => {
+  try {
+    const { id: userId } = req.user;
+    const { courseId } = req.params;
+
+    // Create transaction record
+    await db.insert(transactionsTable).values({
+      date: new Date(),
+      userId,
+      courseId,
+      status: 'completed',
+      amount: '0',
+      paymentId: 'FREE_COURSE'
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Course purchased successfully'
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error purchasing course'
+    });
+  }
+};

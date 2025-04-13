@@ -1,9 +1,9 @@
 import express from 'express';
-import { authenticateUser } from '../middleware/adminAuth';
+import { authenticateUser } from '../controllers/Auth.js';
 import {
   getStudentDashboard,
   getStudentProgress
-} from '../controllers/Student';
+} from '../controllers/Student.js';
 
 const router = express.Router();
 
@@ -13,13 +13,16 @@ router.use(authenticateUser as express.RequestHandler);
 // Dashboard routes
 router.get(
   '/dashboard',
-  getStudentDashboard as express.RequestHandler
+  getStudentDashboard as unknown as express.RequestHandler
 );
 
 // Progress routes
 router.get(
   '/progress/:courseId',
-  getStudentProgress as express.RequestHandler
+  getStudentProgress as unknown as express.RequestHandler
 );
 
 export default router;
+
+
+

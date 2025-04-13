@@ -241,26 +241,10 @@ export const deleteClass = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const getAllClassesOfCourse = async (req: AuthenticatedRequest, res: Response) => {
+export const getModuleClasses = async (req: Request, res: Response) => {
   try {
-    const { courseId } = req.params;
-    const { id: userId } = req.user;
+    const { moduleId } = req.params;
 
-    // First check if the course exists
-    const course = await db
-      .select()
-      .from(coursesTable)
-      .where(eq(coursesTable.id, courseId))
-      .limit(1);
-
-    if (!course.length) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found'
-      });
-    }
-
-    // Get all classes for the course through modules
     const classes = await db
       .select({
         id: classesTable.id,
@@ -270,18 +254,17 @@ export const getAllClassesOfCourse = async (req: AuthenticatedRequest, res: Resp
         fileId: classesTable.fileId
       })
       .from(classesTable)
-      .innerJoin(modulesTable, eq(classesTable.moduleId, modulesTable.id))
-      .where(eq(modulesTable.courseId, courseId));
+      .where(eq(classesTable.moduleId, moduleId));
 
     return res.status(200).json({
       success: true,
       data: classes
     });
   } catch (error) {
-    console.error('Error fetching classes:', error);
+    console.error('Error fetching module classes:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error fetching classes'
+      message: 'Error fetching module classes'
     });
   }
 };
@@ -300,11 +283,5 @@ export const getAllClassesOfCourse = async (req: AuthenticatedRequest, res: Resp
   
 //   return result.length > 0;
 // }
-
-
-
-
-
-
 
 
