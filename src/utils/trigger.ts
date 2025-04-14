@@ -11,6 +11,50 @@ interface AuthenticatedRequest extends Request {
   }
 }
 
+export const initializeTriggers = async () => {
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS doubt_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        doubt_id uuid REFERENCES doubts(id),
+        action VARCHAR(50),
+        old_status VARCHAR(50),
+        new_status VARCHAR(50),
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await db.execute(`
+      CREATE OR REPLACE FUNCTION log_doubt_changes()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF TG_OP = 'INSERT' THEN
+          INSERT INTO doubt_logs (doubt_id, action, new_status, changed_at)
+          VALUES (NEW.id, 'INSERT', NEW.status, CURRENT_TIMESTAMP);
+        ELSIF TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status THEN
+          INSERT INTO doubt_logs (doubt_id, action, old_status, new_status, changed_at)
+          VALUES (NEW.id, 'UPDATE', OLD.status, NEW.status, CURRENT_TIMESTAMP);
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    await db.execute(`
+      DROP TRIGGER IF EXISTS doubt_changes_trigger ON doubts;
+      CREATE TRIGGER doubt_changes_trigger
+      AFTER INSERT OR UPDATE ON doubts
+      FOR EACH ROW
+      EXECUTE FUNCTION log_doubt_changes();
+    `);
+
+    console.log('SQL triggers initialized successfully');
+  } catch (error) {
+    console.error('Error initializing SQL triggers:', error);
+    throw error;
+  }
+};
+
 export const createDoubt = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { contentId, title, description } = req.body;
@@ -39,7 +83,6 @@ export const createDoubt = async (req: AuthenticatedRequest, res: Response) => {
       status: 'open'
     }).returning();
 
-    // Get educator email from the content's module's course's educator
     const educatorEmail = await db.select({
       email: usersTable.email
     })
@@ -91,8 +134,6 @@ export const replyToDoubt = async (req: AuthenticatedRequest, res: Response) => 
       });
     }
      
-
-    // First verify the doubt exists and get associated content and student info
     const doubtInfo = await db.select({
       doubt: doubtsTable.message,
       contentId: doubtsTable.contentId,
@@ -111,8 +152,6 @@ export const replyToDoubt = async (req: AuthenticatedRequest, res: Response) => 
       });
     }
     
-
-    // Verify if the educator is teaching this course
     const isTeachingCourse = await db
       .select()
       .from(contentTable)
@@ -202,16 +241,7 @@ export const getRealtimeStatus = async (_req: Request, res: Response) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+// Initialize triggers when the module is loaded
+initializeTriggers().catch(err => {
+  console.error('Failed to initialize triggers on startup:', err);
+});
