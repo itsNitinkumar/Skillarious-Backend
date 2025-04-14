@@ -1,56 +1,81 @@
-import { razorpay } from '../db/index.ts';
 import crypto from 'crypto';
+import { razorpay } from '../db/index.ts';
 
-export class PaymentService {
-  static async createOrder(amount: number, options: {
-    courseId: string;
-    userId: string;
-    courseName: string;
-  }) {
-    return await razorpay.orders.create({
-      amount: amount * 100, // Convert to paise
-      currency: 'INR',
-      receipt: `receipt_${Date.now()}`,
-      notes: {
-        courseId: options.courseId,
-        userId: options.userId,
-        courseName: options.courseName,
-        purpose: "Course Purchase"
-      }
-    });
-  }
+class PaymentService {
+    static async createOrder(amount: number, options: {
+        courseId: string;
+        userId: string;
+        courseName: string;
+    }) {
+        try {
+            // Ensure amount is a valid number and convert to paise
+            const amountInPaise = Math.round(amount * 100);
+            
+            if (isNaN(amountInPaise) || amountInPaise <= 0) {
+                throw new Error('Invalid amount');
+            }
 
-  static verifyPaymentSignature(
-    orderId: string,
-    paymentId: string,
-    signature: string
-  ): boolean {
-    const body = `${orderId}|${paymentId}`;
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_SECRET!)
-      .update(body)
-      .digest("hex");
-    
-    return expectedSignature === signature;
-  }
+            // Log the request details for debugging
+            console.log('Creating Razorpay order with details:', {
+                amount: amountInPaise,
+                currency: 'INR',
+                receipt: `receipt_${Date.now()}`,
+                notes: options
+            });
 
-  static async fetchPaymentDetails(paymentId: string) {
-    return await razorpay.payments.fetch(paymentId);
-  }
+            const order = await razorpay.orders.create({
+                amount: amountInPaise,
+                currency: 'INR',
+                receipt: `receipt_${Date.now()}`,
+                notes: {
+                    courseId: options.courseId,
+                    userId: options.userId,
+                    courseName: options.courseName
+                }
+            });
 
-  static async initiateRefund(paymentId: string, options: {
-    amount?: number;
-    speed?: 'normal' | 'optimum';
-    notes?: Record<string, string>;
-  } = {}) {
-    return await razorpay.payments.refund(paymentId, {
-      amount: options.amount,
-      speed: options.speed || 'normal',
-      notes: options.notes
-    });
-  }
+            console.log('Razorpay order created successfully:', order);
+            return order;
+        } catch (error: any) {
+            console.error('Razorpay error details:', {
+                errorObject: error,
+                errorDescription: error.error?.description,
+                errorCode: error.error?.code,
+                statusCode: error.statusCode
+            });
 
-  static async getRefundStatus(paymentId: string, refundId: string) {
-    return await razorpay.payments.fetchRefund(paymentId, refundId);
-  }
+            if (error.statusCode === 401 || error.error?.description === 'Authentication failed') {
+                throw new Error('Invalid Razorpay credentials. Please check your API keys.');
+            }
+
+            throw new Error(
+                error.error?.description || 
+                error.message || 
+                'Failed to create payment order'
+            );
+        }
+    }
+
+    static verifyPaymentSignature(
+        orderId: string,
+        paymentId: string,
+        signature: string
+    ): boolean {
+        if (!process.env.RAZORPAY_SECRET) {
+            throw new Error('RAZORPAY_SECRET must be provided in environment variables');
+        }
+
+        const body = `${orderId}|${paymentId}`;
+        const expectedSignature = crypto
+            .createHmac("sha256", process.env.RAZORPAY_SECRET.trim())
+            .update(body)
+            .digest("hex");
+        
+        return expectedSignature === signature;
+    }
 }
+
+export { PaymentService };
+
+
+

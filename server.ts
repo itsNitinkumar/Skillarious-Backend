@@ -30,7 +30,7 @@ app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/otp", otpRoute);
 app.use("/api/v1/courses", courseRoute);
-// app.use("/api/v1/payments", paymentRoute);
+app.use("/api/v1/payments", paymentRoute);
 app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/educators", educatorRoute);
 app.use("/api/v1/content", contentRoute);

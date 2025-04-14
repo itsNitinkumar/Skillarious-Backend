@@ -1,11 +1,10 @@
 import { Request, Response, RequestHandler } from 'express';
 import { db } from '../db/index.ts';
-import { classesTable, coursesTable, educatorsTable, modulesTable } from '../db/schema.ts';
+import { coursesTable, educatorsTable, modulesTable, contentTable } from '../db/schema.ts';
 import { eq, and } from 'drizzle-orm';
-import { uploadMedia } from '../utils/storage.ts';
+import { uploadMedia, deleteMedia } from '../utils/storage.ts';
 import { UploadedFile } from 'express-fileupload';
 
-// Use the global Express namespace to extend Request
 interface AuthenticatedRequest extends Request {
   user: {
     id: string;
@@ -13,7 +12,14 @@ interface AuthenticatedRequest extends Request {
   files?: {
     [key: string]: UploadedFile | UploadedFile[];
   };
-  courseId: string; }
+  courseId: string;
+}
+
+// Add this type to store Cloudinary metadata
+interface CloudinaryUpload {
+  url: string;
+  public_id: string;
+}
 
 async function isEducatorForCourse(userId: string, courseId: string): Promise<boolean> {
   const educator = await db
@@ -32,9 +38,8 @@ async function isEducatorForCourse(userId: string, courseId: string): Promise<bo
 export const createClass = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id: userId } = req.user;
-    const { moduleId, duration } = req.body;
+    const { moduleId, duration, title, description } = req.body;
 
-    // Get courseId from moduleId
     const module = await db.select()
       .from(modulesTable)
       .where(eq(modulesTable.id, moduleId))
@@ -48,8 +53,6 @@ export const createClass = async (req: AuthenticatedRequest, res: Response) => {
     }
 
     const courseId = module[0].courseId;
- 
-    // Check if the user is an educator for the course
     const isEducator = await isEducatorForCourse(userId, courseId);
    
     if (!isEducator) {
@@ -60,7 +63,6 @@ export const createClass = async (req: AuthenticatedRequest, res: Response) => {
     }
 
     const videoFile = req.files?.video as UploadedFile;
-
     if (!videoFile) {
       return res.status(400).json({
         success: false,
@@ -68,18 +70,24 @@ export const createClass = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
   
-    const videoUpload = await uploadMedia(videoFile);
+    const videoUpload = await uploadMedia(videoFile) as CloudinaryUpload;
 
-    const newClass = await db.insert(classesTable).values({
+    const newContent = await db.insert(contentTable).values({
       moduleId,
-      views: 0, // Now we can use number directly
-      duration: duration ? new Date(duration * 1000) : null, // Make duration optional
-      fileId: videoUpload.url
+      title: title || 'Untitled Class',
+      description: description || '',
+      type: 'video',
+      fileUrl: videoUpload.url,
+      cloudinaryId: videoUpload.public_id, // Store public_id
+      duration: duration ? parseFloat(duration) : null,
+      views: 0,
+      order: 0, // You might want to implement proper ordering logic
+      isPreview: false
     }).returning();
    
     return res.status(201).json({
       success: true,
-      data: newClass[0]
+      data: newContent[0]
     });
   } catch (error) {
     return res.status(500).json({
@@ -91,12 +99,16 @@ export const createClass = async (req: AuthenticatedRequest, res: Response) => {
 
 export const getClassStream = async (req: Request, res: Response) => {
   try {
-    const { classId } = req.params;
-    const classContent = await db.select().from(classesTable)
-      .where(eq(classesTable.id, classId))
+    const { contentId } = req.params;
+    const content = await db.select()
+      .from(contentTable)
+      .where(and(
+        eq(contentTable.id, contentId),
+        eq(contentTable.type, 'video')
+      ))
       .limit(1);
 
-    if (!classContent.length) {
+    if (!content.length) {
       return res.status(404).json({
         success: false,
         message: 'Class not found'
@@ -104,13 +116,13 @@ export const getClassStream = async (req: Request, res: Response) => {
     }
 
     // Increment views
-    await db.update(classesTable)
-      .set({ views: (classContent[0].views || 0) + 1 })
-      .where(eq(classesTable.id, classId));
+    await db.update(contentTable)
+      .set({ views: (content[0].views || 0) + 1 })
+      .where(eq(contentTable.id, contentId));
 
     return res.status(200).json({
       success: true,
-      data: classContent[0]
+      data: content[0]
     });
   } catch (error) {
     return res.status(500).json({
@@ -122,30 +134,31 @@ export const getClassStream = async (req: Request, res: Response) => {
 
 export const updateClass = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { classId } = req.params;
+    const { contentId } = req.params;
     const { id: userId } = req.user;
-    const { duration, moduleId } = req.body;
+    const { duration, moduleId, title, description } = req.body;
 
-    // Get courseId from moduleId
-    const classDetails = await db
+    const contentDetails = await db
       .select({
         module: modulesTable,
+        content: contentTable
       })
-      .from(classesTable)
-      .innerJoin(modulesTable, eq(classesTable.moduleId, modulesTable.id))
-      .where(eq(classesTable.id, classId))
+      .from(contentTable)
+      .innerJoin(modulesTable, eq(contentTable.moduleId, modulesTable.id))
+      .where(and(
+        eq(contentTable.id, contentId),
+        eq(contentTable.type, 'video')
+      ))
       .limit(1);
 
-    if (!classDetails.length) {
+    if (!contentDetails.length) {
       return res.status(404).json({
         success: false,
         message: 'Class not found'
       });
     }
 
-    const courseId = classDetails[0].module.courseId;
-
-    // Check if user is educator for the course
+    const courseId = contentDetails[0].module.courseId;
     const isEducator = await isEducatorForCourse(userId, courseId);
     
     if (!isEducator) {
@@ -157,32 +170,33 @@ export const updateClass = async (req: AuthenticatedRequest, res: Response) => {
 
     const updateData: Record<string, any> = {};
 
-    // Update moduleId if provided
-    if (moduleId) {
-      updateData.moduleId = moduleId;
-    }
+    if (moduleId) updateData.moduleId = moduleId;
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (duration) updateData.duration = parseFloat(duration);
 
-    // Update duration if provided
-    if (duration) {
-      updateData.duration = new Date(duration * 1000);
-    }
-
-    // Handle video file update if provided
     if (req.files?.video) {
       const videoFile = req.files.video as UploadedFile;
-      const videoUpload = await uploadMedia(videoFile);
-      updateData.fileId = videoUpload.url;
+      const videoUpload = await uploadMedia(videoFile) as CloudinaryUpload;
+      
+      // Delete old video if exists
+      if (contentDetails[0].content.cloudinaryId) {
+        await deleteMedia(contentDetails[0].content.cloudinaryId);
+      }
+
+      updateData.fileUrl = videoUpload.url;
+      updateData.cloudinaryId = videoUpload.public_id;
     }
 
-    const updatedClass = await db.update(classesTable)
+    const updatedContent = await db.update(contentTable)
       .set(updateData)
-      .where(eq(classesTable.id, classId))
+      .where(eq(contentTable.id, contentId))
       .returning();
 
     return res.status(200).json({
       success: true,
       message: 'Class updated successfully',
-      class: updatedClass[0]
+      data: updatedContent[0]
     });
   } catch (error) {
     return res.status(500).json({
@@ -194,29 +208,42 @@ export const updateClass = async (req: AuthenticatedRequest, res: Response) => {
 
 export const deleteClass = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { classId } = req.params;
+    const { contentId } = req.params;
     const { id: userId } = req.user;
 
-    // Get courseId from moduleId
-    const classDetails = await db
-      .select({
-        module: modulesTable,
-      })
-      .from(classesTable)
-      .innerJoin(modulesTable, eq(classesTable.moduleId, modulesTable.id))
-      .where(eq(classesTable.id, classId))
+    const content = await db.select()
+      .from(contentTable)
+      .where(eq(contentTable.id, contentId))
       .limit(1);
 
-    if (!classDetails.length) {
+    if (!content.length) {
       return res.status(404).json({
         success: false,
         message: 'Class not found'
       });
     }
 
-    const courseId = classDetails[0].module.courseId;
+    // Get module and course details for permission check
+    const contentDetails = await db
+      .select({
+        module: modulesTable,
+      })
+      .from(contentTable)
+      .innerJoin(modulesTable, eq(contentTable.moduleId, modulesTable.id))
+      .where(and(
+        eq(contentTable.id, contentId),
+        eq(contentTable.type, 'video')
+      ))
+      .limit(1);
 
-    // Check if user is educator for the course
+    if (!contentDetails.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Class not found'
+      });
+    }
+
+    const courseId = contentDetails[0].module.courseId;
     const isEducator = await isEducatorForCourse(userId, courseId);
     
     if (!isEducator) {
@@ -226,17 +253,29 @@ export const deleteClass = async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    await db.delete(classesTable)
-      .where(eq(classesTable.id, classId));
+    // Delete from Cloudinary first
+    if (content[0].cloudinaryId) {
+      try {
+        await deleteMedia(content[0].cloudinaryId);
+      } catch (cloudinaryError) {
+        console.error('Cloudinary deletion error:', cloudinaryError);
+      }
+    }
+
+    // Delete from database
+    await db.delete(contentTable)
+      .where(eq(contentTable.id, contentId));
 
     return res.status(200).json({
       success: true,
       message: 'Class deleted successfully'
     });
   } catch (error) {
+    console.error('Error in deleteClass:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error deleting class'
+      message: 'Error deleting class',
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 };
@@ -247,14 +286,22 @@ export const getModuleClasses = async (req: Request, res: Response) => {
 
     const classes = await db
       .select({
-        id: classesTable.id,
-        moduleId: classesTable.moduleId,
-        views: classesTable.views,
-        duration: classesTable.duration,
-        fileId: classesTable.fileId
+        id: contentTable.id,
+        moduleId: contentTable.moduleId,
+        title: contentTable.title,
+        description: contentTable.description,
+        views: contentTable.views,
+        duration: contentTable.duration,
+        fileUrl: contentTable.fileUrl,
+        order: contentTable.order,
+        isPreview: contentTable.isPreview
       })
-      .from(classesTable)
-      .where(eq(classesTable.moduleId, moduleId));
+      .from(contentTable)
+      .where(and(
+        eq(contentTable.moduleId, moduleId),
+        eq(contentTable.type, 'video')
+      ))
+      .orderBy(contentTable.order);
 
     return res.status(200).json({
       success: true,
@@ -269,19 +316,28 @@ export const getModuleClasses = async (req: Request, res: Response) => {
   }
 };
 
-// // Helper function to check if user is educator for the class
-// async function isEducatorForClass(userId: string, classId: string) {
-//   const result = await db
-//     .select()
-//     .from(classesTable)
-//     .innerJoin(coursesTable, eq(classesTable.moduleId, coursesTable.id))
-//     .innerJoin(educatorsTable, eq(coursesTable.educatorId, educatorsTable.id))
-//     .where(and(
-//       eq(classesTable.id, classId),
-//       eq(educatorsTable.userId, userId)
-//     ));
-  
-//   return result.length > 0;
-// }
+// When uploading content, store the cloudinaryId:
+export const uploadContent = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // ... existing upload logic ...
+    
+    const uploadResult = await uploadToCloudinary(file);
+    
+    await db.insert(contentTable).values({
+      // ... other fields ...
+      fileUrl: uploadResult.secure_url,
+      cloudinaryId: uploadResult.public_id, // Store the cloudinary ID
+    });
+
+    // ... rest of the function ...
+  } catch (error) {
+    // ... error handling ...
+  }
+};
+
+
+
+
+
 
 

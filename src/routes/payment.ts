@@ -1,18 +1,13 @@
-
-import express from "express";
+import express from "express"; // Import express
 import { 
-  createPayment, 
-  verifyPayment, 
-  getTransactionHistory,
-  refundPayment 
+    createPayment, 
+    verifyPayment, 
+    getTransactionHistory,
+    refundPayment,
+    testRazorpayConnection 
 } from "../controllers/Payment.ts";
 import { authenticateUser } from "../controllers/Auth.ts";
-import { validateSchema } from "../middleware/validateSchema.ts";
-import { 
-  createPaymentSchema, 
-  verifyPaymentSchema, 
-  refundSchema 
-} from "../schemas/payment.ts";
+import { validatePaymentRequest } from "../middleware/validateSchema.ts";
 
 const router = express.Router();
 
@@ -21,29 +16,24 @@ router.use(authenticateUser as express.RequestHandler);
 
 // Create payment route
 router.post(
-  "/create",
-  validateSchema(createPaymentSchema) as express.RequestHandler,
-  createPayment as express.RequestHandler
+    "/create",
+    validatePaymentRequest('create') as express.RequestHandler,
+    createPayment as unknown as express.RequestHandler
 );
 
 // Verify payment route
 router.post(
-  "/verify",
-  validateSchema(verifyPaymentSchema) as express.RequestHandler,
-  verifyPayment as express.RequestHandler
+    "/verify",
+    validatePaymentRequest('verify') as express.RequestHandler,
+    verifyPayment as unknown as express.RequestHandler
 );
 
 // Get transaction history
-router.get(
-  "/history",
-  getTransactionHistory as express.RequestHandler
-);
+router.get("/history", getTransactionHistory as unknown as express.RequestHandler);
 
-// Refund route (optional)
-router.post(
-  "/refund",
-  validateSchema(refundSchema) as express.RequestHandler,
-  refundPayment as express.RequestHandler
-);
+// Refund route
+router.post("/refund", refundPayment as unknown as express.RequestHandler);
+
+router.get("/test-connection", testRazorpayConnection as unknown as express.RequestHandler);
 
 export default router;

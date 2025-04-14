@@ -111,14 +111,14 @@ export const modulesTable = pgTable('modules', {
   dismissedAt: timestamp('dismissed_at'),
 });
 
-// CLASSES TABLE
-export const classesTable = pgTable('classes', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  moduleId: uuid('module_id').notNull().references(() => modulesTable.id),
-  views: bigint('views', { mode: 'number' }).default(0), // Changed to mode: 'number'
-  duration: timestamp('duration'),
-  fileId: text('file_id'),
-});
+// // CLASSES TABLE
+// export const classesTable = pgTable('classes', {
+//   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+//   moduleId: uuid('module_id').notNull().references(() => modulesTable.id),
+//   views: bigint('views', { mode: 'number' }).default(0), // Changed to mode: 'number'
+//   duration: timestamp('duration'),
+//   fileId: text('file_id'),
+// });
 
 // REVIEWS TABLE
 export const reviewsTable = pgTable('reviews', {
@@ -186,9 +186,9 @@ export const contentTable = pgTable('content', {
   description: text('description'),
   order: integer('order').notNull(),
   fileUrl: text('file_url').notNull(),
-  type: text('type').notNull(), // Instead of fileType
+  type: text('type').notNull(), // video, document, quiz, assignment
   views: bigint('views', { mode: 'number' }).default(0),
-  duration: real('duration'), // Optional: for video/audio files
+  duration: real('duration'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   isPreview: boolean('is_preview').default(false),
@@ -196,7 +196,8 @@ export const contentTable = pgTable('content', {
   dismissReason: text('dismiss_reason'),
   dismissedAt: timestamp('dismissed_at'),
   viewCount: integer('view_count').default(0),
-  timeSpent: integer('time_spent').default(0), // in seconds
+  timeSpent: integer('time_spent').default(0),
+  cloudinaryId: text('cloudinary_id'), // Add this field
 });
 // Type definitions
 export type Content = typeof contentTable.$inferSelect;

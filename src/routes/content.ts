@@ -45,11 +45,12 @@ router.get('/searchCategory', getCategoryBySearch as unknown as RequestHandler);
 // Class related routes
 router.post('/createClass', authenticateUser as unknown as RequestHandler, createClass as unknown as RequestHandler);
 router.get('/getModuleClasses/:moduleId', authenticateUser as unknown as RequestHandler, getModuleClasses as unknown as RequestHandler);
-router.get('/getClassStream/:classId', getClassStream as unknown as RequestHandler);
-router.put('/updateClass/:classId', authenticateUser as unknown as RequestHandler, updateClass as unknown as RequestHandler);
-router.delete('/deleteClass/:classId', authenticateUser as unknown as RequestHandler, deleteClass as unknown as RequestHandler);
+router.get('/getClassStream/:contentId', getClassStream as unknown as RequestHandler);
+router.put('/updateClass/:contentId', authenticateUser as unknown as RequestHandler, updateClass as unknown as RequestHandler);
+router.delete('/deleteClass/:contentId', authenticateUser as unknown as RequestHandler, deleteClass as unknown as RequestHandler);
 
 export default router;
+
 
 
 

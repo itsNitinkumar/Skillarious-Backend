@@ -14,9 +14,16 @@ if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET) {
   throw new Error('RAZORPAY_KEY_ID and RAZORPAY_SECRET must be defined in environment variables');
 }
 
+// Add this logging to debug the credentials
+console.log('Initializing Razorpay with:', {
+  keyId: process.env.RAZORPAY_KEY_ID?.substring(0, 4) + '...',
+  secretLength: process.env.RAZORPAY_SECRET?.length,
+  keyIdLength: process.env.RAZORPAY_KEY_ID?.length
+});
+
 export const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_SECRET,
+  key_id: process.env.RAZORPAY_KEY_ID.trim(),
+  key_secret: process.env.RAZORPAY_SECRET.trim()
 });
 
 
