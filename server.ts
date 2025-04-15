@@ -10,6 +10,7 @@ import educatorRoute from "./src/routes/educator.ts";
 import contentRoute from "./src/routes/content.ts";
 import fileUpload from 'express-fileupload';
 import userRoutes from "./src/routes/user.ts";
+import studentRoute from "./src/routes/student.ts";
 import cookieParser from "cookie-parser";
 
 const app = express();
@@ -36,6 +37,7 @@ app.use("/api/v1/payments", paymentRoute);
 app.use("/api/v1/reviews", reviewRoute);
 app.use("/api/v1/educators", educatorRoute);
 app.use("/api/v1/content", contentRoute);
+app.use("/api/v1/student", studentRoute);
 
 const PORT = process.env.PORT || 4001;
 app.listen(PORT, () => {
