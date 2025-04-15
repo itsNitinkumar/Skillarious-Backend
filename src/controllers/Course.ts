@@ -560,3 +560,31 @@ export const purchaseCourse = async (req: AuthenticatedRequest, res: Response): 
     });
   }
 };
+
+export const getPurchasedCourses = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id: userId } = req.user;
+
+    const purchases = await db
+      .select({
+        courseId: transactionsTable.courseId,
+        purchaseDate: transactionsTable.createdAt
+      })
+      .from(transactionsTable)
+      .where(and(
+        eq(transactionsTable.userId, userId),
+        eq(transactionsTable.status, 'completed')
+      ));
+
+    return res.status(200).json({
+      success: true,
+      purchases
+    });
+  } catch (error) {
+    console.error('Error fetching purchased courses:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch purchased courses'
+    });
+  }
+};

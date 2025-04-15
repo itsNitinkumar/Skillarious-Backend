@@ -43,6 +43,12 @@ app.use(fileUpload({
 }));
 
 // Routes
+
+// Health check route
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Server is running' });
+});
+
 app.use('/api/v1/users', userRoutes);
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/otp", otpRoute);

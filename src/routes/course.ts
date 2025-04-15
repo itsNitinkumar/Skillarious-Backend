@@ -13,7 +13,8 @@ import {
     getCoursesByEducator,
     checkCourseOwnership,
     checkCourseAccess,
-    purchaseCourse
+    purchaseCourse,
+    getPurchasedCourses
 } from '../controllers/Course.ts';
 
 // Protected routes (require authentication)
@@ -33,5 +34,6 @@ router.get('/educator/:id', getCoursesByEducator as unknown as express.RequestHa
 router.get("/ownership/:courseId",  authenticateUser as unknown as express.RequestHandler, checkCourseOwnership as unknown as express.RequestHandler);
 router.get("/access/:courseId",  authenticateUser as unknown as express.RequestHandler, checkCourseAccess as unknown as express.RequestHandler);
 router.post("/purchase/:courseId",  authenticateUser as unknown as express.RequestHandler, purchaseCourse as unknown as express.RequestHandler);
+router.get('/purchased', authenticateUser, getPurchasedCourses);
 
 export default router;

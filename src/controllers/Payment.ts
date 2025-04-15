@@ -65,7 +65,29 @@ export const createPayment = async (req: AuthenticatedRequest, res: Response) =>
             courseName: course[0].name,
         });
 
-        // Return the structured response
+        // Clear any existing Razorpay cookies
+        res.clearCookie('rzp_current');
+        res.clearCookie('rzp_merchant_id');
+        res.clearCookie('rzp_mid');
+        res.clearCookie('rzp_user_id');
+        res.clearCookie('rzp_userid');
+        res.clearCookie('rzp_utm');
+        res.clearCookie('campaignStartTime');
+        res.clearCookie('canary-user-id');
+        res.clearCookie('clientId');
+        res.clearCookie('CSRF-TOKEN');
+        res.clearCookie('firstAttribUtm');
+        res.clearCookie('lastActivityTimeStamp');
+        res.clearCookie('lastAttribUtm');
+        res.clearCookie('ra_clientId');
+        res.clearCookie('ra_lastActivityTimeStamp');
+        res.clearCookie('ra_sessionId');
+        res.clearCookie('ra_sessionReferrer');
+        res.clearCookie('ra_utm');
+        res.clearCookie('sessionId');
+        res.clearCookie('sessionReferrer');
+        res.clearCookie('utm_params_analytics');
+
         return res.status(200).json({ 
             success: true, 
             key: process.env.RAZORPAY_KEY_ID,
@@ -250,64 +272,70 @@ export const refundPayment = async (req: AuthenticatedRequest, res: Response) =>
 
 export const testRazorpayConnection = async (req: Request, res: Response) => {
     try {
-        // Log initialization parameters
-        console.log('Testing Razorpay connection with:', {
-            keyIdExists: !!process.env.RAZORPAY_KEY_ID,
-            keyIdPrefix: process.env.RAZORPAY_KEY_ID?.substring(0, 4),
-            secretExists: !!process.env.RAZORPAY_SECRET
-        });
+        const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+        const secret = process.env.RAZORPAY_SECRET?.trim();
 
-        // Verify credentials are present
-        if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET) {
-            return res.status(500).json({
+        // Detailed credential check
+        const credentialInfo = {
+            keyId: {
+                exists: !!keyId,
+                length: keyId?.length,
+                prefix: keyId?.substring(0, 8),
+                isTestKey: keyId?.startsWith('rzp_test_')
+            },
+            secret: {
+                exists: !!secret,
+                length: secret?.length
+            }
+        };
+
+        console.log('Credential Check:', credentialInfo);
+
+        // Verify basic credential format
+        if (!keyId?.startsWith('rzp_test_')) {
+            return res.status(400).json({
                 success: false,
-                message: 'Razorpay credentials are missing',
-                details: {
-                    keyIdPresent: !!process.env.RAZORPAY_KEY_ID,
-                    secretPresent: !!process.env.RAZORPAY_SECRET
-                }
+                message: 'Invalid key format. Must start with rzp_test_',
+                credentialInfo
             });
         }
 
-        // Try to fetch a list of payments with error handling
+        // Test API call with explicit error handling
         try {
-            const response = await razorpay.payments.all({
-                from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-                to: new Date().toISOString(),
-                count: 1 // Limit to 1 payment to minimize data transfer
+            const testOrder = await razorpay.orders.create({
+                amount: 100,
+                currency: 'INR',
+                receipt: 'test_receipt_' + Date.now(),
+                notes: {
+                    purpose: 'connection_test'
+                }
             });
-            
+
             return res.status(200).json({
                 success: true,
                 message: 'Razorpay connection successful',
-                keyId: process.env.RAZORPAY_KEY_ID?.substring(0, 4) + '...',
-                keyIdLength: process.env.RAZORPAY_KEY_ID?.length,
-                secretLength: process.env.RAZORPAY_SECRET?.length,
-                apiResponse: response ? 'Received' : 'Empty'
+                testOrder: {
+                    id: testOrder.id,
+                    status: testOrder.status
+                },
+                credentialInfo
             });
         } catch (apiError: any) {
-            console.error('Razorpay API error:', {
-                error: apiError,
-                message: apiError.message,
-                description: apiError.error?.description,
-                code: apiError.error?.code
-            });
-
-            return res.status(500).json({
+            return res.status(401).json({
                 success: false,
-                message: 'Razorpay API call failed',
+                message: 'API call failed',
                 error: {
-                    message: apiError.message,
+                    code: apiError.error?.code,
                     description: apiError.error?.description,
-                    code: apiError.error?.code
-                }
+                    statusCode: apiError.statusCode
+                },
+                credentialInfo
             });
         }
     } catch (error: any) {
-        console.error('Razorpay connection test error:', error);
         return res.status(500).json({
             success: false,
-            message: 'Razorpay connection test failed',
+            message: 'Test failed',
             error: error.message
         });
     }

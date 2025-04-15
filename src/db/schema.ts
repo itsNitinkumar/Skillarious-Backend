@@ -159,7 +159,7 @@ export const doubtsTable = pgTable('doubts', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   fileId: uuid('file_id').references(() => filesTable.id),
   message: text('message').notNull(),
-  classId: uuid('class_id').references(() => classesTable.id),
+  classId: uuid('class_id').references(() => contentTable.id),
   date: timestamp('date').notNull(),
   educatorAssigned: uuid('educator_assigned').references(() => educatorsTable.id),
   resolved: boolean('resolved').notNull().default(false),
@@ -219,8 +219,8 @@ export type InsertModule = typeof modulesTable.$inferInsert;
 export type SelectModule = typeof modulesTable.$inferSelect;
 
 
-export type InsertClass = typeof classesTable.$inferInsert;
-export type SelectClass = typeof classesTable.$inferSelect;
+export type InsertClass = typeof contentTable.$inferInsert;
+export type SelectClass = typeof contentTable.$inferSelect;
 
 export type InsertReview = typeof reviewsTable.$inferInsert;
 export type SelectReview = typeof reviewsTable.$inferSelect;

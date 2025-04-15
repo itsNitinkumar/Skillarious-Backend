@@ -145,26 +145,57 @@ export const login = async (req: Request, res: Response) => {
 
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
-      const { email } = req.body;
+    const { email } = req.body;
 
-      if (!email) {
-          res.status(400).json({ success: false, message: "Email is required" });
-          return;
-      }
-
-      const userRecord = await db.select().from(users).where(eq(users.email, email));
-      if (!userRecord.length) {
-          res.status(404).json({ success: false, message: "User not found" });
-          return;
-      }
-
-      await generateOtp(req, res);
+    if (!email) {
+      res.status(400).json({ success: false, message: "Email is required" });
       return;
+    }
+
+    // Check if user exists with this email
+    const user = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+
+    if (!user.length) {
+      res.status(404).json({ 
+        success: false, 
+        message: "No account exists with this email address" 
+      });
+      return;
+    }
+
+    // Use the existing generateOtp endpoint
+    const response = await fetch(`${process.env.HOST_URL}/api/v1/otp/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      res.status(500).json({
+        success: false,
+        message: data.message || "Failed to send OTP"
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "OTP sent successfully to your email"
+    });
+    return;
 
   } catch (error) {
-      console.error(error);
-      res.status(500).json({ success: false, message: "Internal Server Error" });
-      return;
+    console.error("Forgot password error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to process password reset request" 
+    });
+    return;
   }
 };  
 
@@ -173,37 +204,51 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { email, otp, newPassword } = req.body;
 
     if (!email || !otp || !newPassword) {
-        res.status(400).json({ success: false, message: "Email, OTP, and new password are required" });
-        return;
+      res.status(400).json({ 
+        success: false, 
+        message: "Email, OTP, and new password are required" 
+      });
+      return;
     }
 
-    const response  = await fetch(`${process.env.HOST_URL}/api/v1/otp/verify`,
-    {
-        method: "post",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
+    // Verify OTP
+    const response = await fetch(`${process.env.HOST_URL}/api/v1/otp/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp }),
     });
 
     const data = await response.json();
       
     if (!data.success) {
-        res.status(response.status).json({
-            success: false,
-            message: data.message,
-        }); return ;
+      res.status(400).json({
+        success: false,
+        message: data.message || 'Invalid or expired OTP'
+      });
+      return;
     }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      await db.update(users).set({ password: hashedPassword }).where(eq(users.email, email));
+    // Update password in database
+    await db.update(users)
+      .set({ password: hashedPassword })
+      .where(eq(users.email, email));
 
-      res.status(200).json({ success: true, message: "Password has been reset successfully" });
-      return;
+    res.status(200).json({ 
+      success: true, 
+      message: "Password has been reset successfully" 
+    });
+    return;
 
   } catch (error) {
-      console.error(error);
-      res.status(500).json({ success: false, message: "Internal Server Error" });
-      return;
+    console.error('Reset password error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to reset password" 
+    });
+    return;
   }
 };
 

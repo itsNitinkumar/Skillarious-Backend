@@ -10,20 +10,27 @@ const client = postgres(process.env.DATABASE_URL || "");
 export const db = drizzle({ client });
 
 // Razorpay configuration
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET) {
-  throw new Error('RAZORPAY_KEY_ID and RAZORPAY_SECRET must be defined in environment variables');
-}
+const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+const secret = process.env.RAZORPAY_SECRET?.trim();
 
-// Add this logging to debug the credentials
-console.log('Initializing Razorpay with:', {
-  keyId: process.env.RAZORPAY_KEY_ID?.substring(0, 4) + '...',
-  secretLength: process.env.RAZORPAY_SECRET?.length,
-  keyIdLength: process.env.RAZORPAY_KEY_ID?.length
+console.log('Razorpay Credentials Check:', {
+  keyIdLength: keyId?.length,
+  keyIdStart: keyId?.substring(0, 8),
+  secretLength: secret?.length,
+  isTestKey: keyId?.startsWith('rzp_test_')
 });
 
+if (!keyId || !secret) {
+  throw new Error('Razorpay credentials are missing');
+}
+
+if (!keyId.startsWith('rzp_test_')) {
+  throw new Error('Invalid Razorpay key format. Test key should start with rzp_test_');
+}
+
 export const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID.trim(),
-  key_secret: process.env.RAZORPAY_SECRET.trim()
+  key_id: keyId,
+  key_secret: secret
 });
 
 
